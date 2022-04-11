@@ -3,13 +3,16 @@ package v1
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/go-chi/render"
 	"github.com/rs/xid"
 	"io/fs"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"path/filepath"
+	"time"
 )
 
 const (
@@ -23,9 +26,10 @@ type UserRequest struct {
 }
 
 type User struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Password string `json:"password"`
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Password   string    `json:"password"`
+	LastActive time.Time `json:"last_active"`
 }
 
 type UserManager struct {
@@ -48,6 +52,8 @@ func CreateUserHandler(userChan chan<- UserRequest) func(w http.ResponseWriter, 
 			_ = render.Render(w, r, ErrBadRequest)
 			return
 		}
+
+		// Validate the request body
 		if u.Name == "" || u.Password == "" {
 			_ = render.Render(w, r, ErrBadRequest)
 			return
@@ -92,19 +98,17 @@ func NewUserManager(p string) *UserManager {
 }
 
 func (um *UserManager) Serve() (chan<- UserRequest, <-chan error) {
-	urChan := make(chan UserRequest)
-	errChan := make(chan error)
+	urChan := make(chan UserRequest, 10)
+	errChan := make(chan error, 10)
 
 	go func() {
 		for ur := range urChan {
 			switch ur.Method {
 			case UserCreate:
-				fmt.Println("CREATING")
 				if err := um.Create(ur.User); err != nil {
 					errChan <- err
 				}
 			case UserDelete:
-				fmt.Println("DELETING")
 				if err := um.Delete(ur.User); err != nil {
 					errChan <- err
 				}
@@ -127,19 +131,89 @@ func (um *UserManager) Create(u User) error {
 	um.activeUsers = append(um.activeUsers, u)
 
 	return nil
-	//b, err := json.Marshal(u)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//return os.WriteFile(filepath.Join(um.userPath, u.ID), b, 0600)
 }
 
 func (um *UserManager) Delete(u User) error {
 	return nil
 }
 
+func (um *UserManager) Load(id string) error {
+	path := filepath.Join(um.userPath, id)
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("user not found")
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("failed to open user file")
+	}
+
+	b, err := ioutil.ReadAll(f)
+	if err != nil {
+		return fmt.Errorf("failed to read user file: %w", err)
+	}
+
+	var u User
+	err = json.Unmarshal(b, &u)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal user: %w", err)
+	}
+
+	if err = u.Validate(); err != nil {
+		return err
+	}
+
+	um.activeUsers = append(um.activeUsers, u)
+
+	return nil
+}
+
+// Save writes the specified user to disk and removes them from the active user list.
+func (um *UserManager) Save(id string) error {
+	for _, u := range um.activeUsers {
+		if u.ID == id {
+			b, err := json.Marshal(u)
+			if err != nil {
+				return err
+			}
+
+			return os.WriteFile(filepath.Join(um.userPath, u.ID), b, 0600)
+		}
+	}
+
+	return fmt.Errorf("user not found")
+}
+
 func (um *UserManager) Flush() error {
+	err := os.MkdirAll(um.userPath, 0700)
+	if err != nil {
+		return err
+	}
+
+	for _, u := range um.activeUsers {
+		path := filepath.Join(um.userPath, u.ID)
+
+		b, err := json.MarshalIndent(u, "", "  ")
+		if err != nil {
+			return err
+		}
+
+		f, err := os.Create(path)
+		if err != nil {
+			return err
+		}
+
+		_, err = f.Write(b)
+		if err != nil {
+			return err
+		}
+
+		err = f.Close()
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
