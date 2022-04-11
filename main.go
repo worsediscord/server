@@ -34,7 +34,7 @@ func main() {
 func buildRouter() *chi.Mux {
 	rm := v1.NewRoomManager("state")
 	um := v1.NewUserManager("state")
-	urChan := um.Serve()
+	urChan, _ := um.Serve()
 
 	go func() {
 		sigchan := make(chan os.Signal)
@@ -42,6 +42,11 @@ func buildRouter() *chi.Mux {
 		<-sigchan
 
 		err := rm.Flush()
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		err = um.Flush()
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -61,19 +66,11 @@ func buildRouter() *chi.Mux {
 		//r.Use(Apikey(keys))
 		r.Use(middleware.BasicAuth("chat", creds))
 		r.Get("/", v1.ListRoomsHandler(rm))
-		r.Post("/create", v1.CreateRoomHandler(rm)) // GET /api/v1/rooms/create
-		//r.Route("/{roomID}", func(r chi.Router) {
-		//	r.Get("/", v1.ListNode) // GET /api/v1/rooms/{roomID}
-		//	r.Route("/{chainID}", func(r chi.Router) {
-		//		r.Get("/{name}", v1.StatusNode)    // GET /api/v1/nodes/{accountID}/{chainID}/{name}
-		//		r.Put("/{name}", v1.UpdateNode)    // PUT /api/v1/nodes/{accountID}/{chainID}/{name}
-		//		r.Delete("/{name}", v1.DeleteNode) // DELETE /api/v1/nodes/{accountID}/{chainID}/{name}
-		//	})
-		//})
+		r.Post("/create", v1.CreateRoomHandler(rm)) // POST /api/v1/rooms/create
 	})
 
 	r.Route("/api/v1/users", func(r chi.Router) {
-		r.Post("/create", v1.CreateUserHandler(urChan)) // GET /api/v1/rooms/create
+		r.Post("/create", v1.CreateUserHandler(urChan)) // POST /api/v1/users/create
 	})
 
 	return r
