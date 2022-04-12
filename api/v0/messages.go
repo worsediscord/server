@@ -28,17 +28,21 @@ func GetMessageHandler(s *State) func(w http.ResponseWriter, r *http.Request) {
 
 		f, _ := w.(http.Flusher)
 
-		for _, m := range s.Messages {
-			if accept == "application/json" {
-				b, _ := json.Marshal(m)
-				w.Write(b)
-				f.Flush()
-			} else {
+		response := struct {
+			Messages []Message `json:"messages"`
+		}{}
+		response.Messages = s.Messages
+
+		if accept == "application/json" {
+			b, _ := json.Marshal(response)
+			w.Write(b)
+			f.Flush()
+		} else {
+			for _, m := range s.Messages {
 				w.Write([]byte(fmt.Sprintf("[%s] %s: %s\n", m.Timestamp, m.Author, m.Text)))
 				f.Flush()
 			}
 		}
-
 		w.WriteHeader(http.StatusOK)
 	}
 }
