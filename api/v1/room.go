@@ -3,6 +3,7 @@ package v1
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 	"github.com/rs/xid"
 	"io/ioutil"
@@ -84,13 +85,24 @@ func ListRoomsHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Reque
 		}
 
 		listRoomsResponse := struct {
-			Rooms []string `json:"rooms"`
+			//Rooms []string `json:"rooms"`
+			Rooms []struct {
+				Name string `json:"name"`
+				ID   string `json:"id"`
+			} `json:"rooms"`
 		}{}
 
-		for _, r := range rm.activeRooms {
-			for _, m := range r.Members {
+		for _, room := range rm.activeRooms {
+			for _, m := range room.Members {
 				if m.Name == user {
-					listRoomsResponse.Rooms = append(listRoomsResponse.Rooms, r.Name)
+					resp := struct {
+						Name string `json:"name"`
+						ID   string `json:"id"`
+					}{
+						Name: room.Name,
+						ID:   room.ID,
+					}
+					listRoomsResponse.Rooms = append(listRoomsResponse.Rooms, resp)
 				}
 			}
 		}
@@ -104,8 +116,33 @@ func ListRoomsHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-func GetRoom(w http.ResponseWriter, r *http.Request) {
+func GetRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "ID")
+		if id == "" {
+			_ = render.Render(w, r, ErrBadRequest)
+			return
+		}
 
+		_, _, ok := r.BasicAuth()
+		if !ok {
+			_ = render.Render(w, r, ErrUnauthorized)
+			return
+		}
+
+		for _, room := range rm.activeRooms {
+			if room.ID == id {
+				b, err := json.Marshal(room)
+				if err != nil {
+					_ = render.Render(w, r, ErrBadRequest)
+					return
+				}
+				w.Write(b)
+				w.WriteHeader(200)
+			}
+		}
+
+	}
 }
 
 func NewRoomManager(p string) *RoomManager {

@@ -63,10 +63,10 @@ func buildRouter() *chi.Mux {
 	r.Use(middleware.Timeout(10 * time.Second))
 
 	r.Route("/api/v1/rooms", func(r chi.Router) {
-		//r.Use(Apikey(keys))
 		r.Use(middleware.BasicAuth("chat", creds))
-		r.Get("/", v1.ListRoomsHandler(rm))
-		r.Post("/create", v1.CreateRoomHandler(rm)) // POST /api/v1/rooms/create
+		r.Get("/", v1.ListRoomsHandler(rm))   // GET /api/v1/rooms
+		r.Post("/", v1.CreateRoomHandler(rm)) // POST /api/v1/rooms
+		r.Get("/{ID}", v1.GetRoomHandler(rm)) // GET /api/v1/rooms/{ID}
 	})
 
 	r.Route("/api/v1/users", func(r chi.Router) {
