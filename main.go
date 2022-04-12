@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/subtle"
 	"fmt"
+	v0 "github.com/eolso/chat/api/v0"
 	v1 "github.com/eolso/chat/api/v1"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -35,6 +36,7 @@ func buildRouter() *chi.Mux {
 	rm := v1.NewRoomManager("state")
 	um := v1.NewUserManager("state")
 	urChan, _ := um.Serve()
+	var s v0.State
 
 	go func() {
 		sigchan := make(chan os.Signal)
@@ -72,6 +74,12 @@ func buildRouter() *chi.Mux {
 
 	r.Route("/api/v1/users", func(r chi.Router) {
 		r.Post("/create", v1.CreateUserHandler(urChan)) // POST /api/v1/users/create
+	})
+
+	r.Route("/api/v0/messages", func(r chi.Router) {
+		r.Use(middleware.BasicAuth("chat", creds))
+		r.Get("/", v0.GetMessageHandler(&s))
+		r.Post("/", v0.SendMessageHandler(&s))
 	})
 
 	return r
