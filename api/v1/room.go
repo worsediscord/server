@@ -76,6 +76,29 @@ func CreateRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+func RemoveRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "ID")
+		if id == "" {
+			_ = render.Render(w, r, ErrBadRequest)
+			return
+		}
+
+		_, _, ok := r.BasicAuth()
+		if !ok {
+			_ = render.Render(w, r, ErrUnauthorized)
+			return
+		}
+
+		for i, room := range rm.activeRooms {
+			if room.ID == id {
+				rm.activeRooms = append(rm.activeRooms[:i], rm.activeRooms[i+1:]...)
+				w.WriteHeader(200)
+			}
+		}
+	}
+}
+
 func ListRoomsHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _, ok := r.BasicAuth()
@@ -141,6 +164,11 @@ func GetRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request
 				w.WriteHeader(200)
 			}
 		}
+	}
+}
+
+func InviteRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 
 	}
 }
