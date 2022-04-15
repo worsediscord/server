@@ -1,17 +1,15 @@
 package main
 
 import (
-	"crypto/subtle"
-	"fmt"
+	"context"
 	v0 "github.com/eolso/chat/api/v0"
-	v1 "github.com/eolso/chat/api/v1"
+	v2 "github.com/eolso/chat/api/v2"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
 	"github.com/rs/zerolog/log"
 	"net/http"
-	"os"
-	"os/signal"
+	"path/filepath"
 	"time"
 )
 
@@ -24,37 +22,26 @@ var creds = map[string]string{
 	"eric":    "beesarecute",
 }
 
-func main() {
-	r := buildRouter()
-	err := http.ListenAndServe(":8080", r)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to start server")
-	}
-}
+const realm = "worsediscord"
 
-func buildRouter() *chi.Mux {
-	rm := v1.NewRoomManager("state")
-	um := v1.NewUserManager("state")
-	urChan, _ := um.Serve()
+func main() {
 	var s v0.State
 
-	go func() {
-		sigchan := make(chan os.Signal)
-		signal.Notify(sigchan, os.Interrupt)
-		<-sigchan
+	ctx, cancel := context.WithCancel(context.Background())
 
-		err := rm.Flush()
-		if err != nil {
-			fmt.Println(err)
-		}
+	roomFlusher, err := v2.NewFileFlusher(filepath.Join("state", "room"))
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create room flusher")
+	}
 
-		err = um.Flush()
-		if err != nil {
-			fmt.Println(err)
-		}
+	userFlusher, err := v2.NewFileFlusher(filepath.Join("state", "user"))
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create room flusher")
+	}
 
-		os.Exit(0)
-	}()
+	rm := v2.NewRoomManager().WithFlusher(ctx, roomFlusher)
+	um := v2.NewUserManager().WithFlusher(ctx, userFlusher)
+	akm := v2.NewApiKeyManager()
 
 	r := chi.NewRouter()
 
@@ -64,49 +51,42 @@ func buildRouter() *chi.Mux {
 	r.Use(render.SetContentType(render.ContentTypeJSON))
 	r.Use(middleware.Timeout(10 * time.Second))
 
-	r.Route("/api/v1/rooms", func(r chi.Router) {
-		r.Use(middleware.BasicAuth("chat", creds))
-		r.Get("/", v1.ListRoomsHandler(rm))         // GET /api/v1/rooms
-		r.Post("/", v1.CreateRoomHandler(rm))       // POST /api/v1/rooms
-		r.Get("/{ID}", v1.GetRoomHandler(rm))       // GET /api/v1/rooms/{ID}
-		r.Delete("/{ID}", v1.RemoveRoomHandler(rm)) // DELETE /api/v1/rooms/{ID}
-	})
-
-	r.Route("/api/v1/users", func(r chi.Router) {
-		r.Post("/create", v1.CreateUserHandler(urChan)) // POST /api/v1/users/create
-	})
-
 	r.Route("/api/v0/messages", func(r chi.Router) {
 		r.Use(middleware.BasicAuth("chat", creds))
 		r.Get("/", v0.GetMessageHandler(&s))
 		r.Post("/", v0.SendMessageHandler(&s))
 	})
 
-	return r
-}
-
-func Apikey(keys []string) func(next http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			key := r.Header.Get("apikey")
-			if key == "" {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			var found bool
-			for _, k := range keys {
-				if subtle.ConstantTimeCompare([]byte(k), []byte(key)) == 1 {
-					found = true
-				}
-			}
-
-			if !found {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			next.ServeHTTP(w, r)
+	// v2 api routes
+	r.Route("/api/v2", func(r chi.Router) {
+		// user routes
+		r.Route("/user", func(r chi.Router) {
+			r.Post("/", v2.CreateUserHandler(um)) // POST /api/v2/user
+			r.Get("/", v2.ListUserHandler(um))    // GET /api/v2/user TODO this should probably be under an admin route
+			r.Route("/login", func(r chi.Router) {
+				r.Use(v2.BasicAuthMiddleware(realm, um))
+				r.Post("/", v2.LoginUserHandler(um, akm)) // TODO reminder this is shite
+			})
 		})
+
+		// room routes
+		r.Route("/room", func(r chi.Router) {
+			r.Use(v2.ApiAuthMiddleware(akm))
+			r.Get("/", v2.ListRoomHandler(rm))        // GET /api/v2/room
+			r.Post("/", v2.CreateRoomHandler(um, rm)) // POST /api/v2/room TODO also fix this cuz probs shite
+
+			r.Route("/{ID}", func(r chi.Router) {
+				r.Get("/", v2.GetRoomHandler(rm))       // GET /api/v2/room/{ID}
+				r.Delete("/", v2.DeleteRoomHandler(rm)) // DELETE /api/v2/room/{ID}
+				r.Get("/message", v2.ListMessagesHandler(rm))
+				r.Post("/message", v2.SendMessageHandler(rm))
+			})
+		})
+	})
+
+	err = http.ListenAndServe(":8080", r)
+	if err != nil {
+		cancel()
+		log.Fatal().Err(err).Msg("failed to start server")
 	}
 }
