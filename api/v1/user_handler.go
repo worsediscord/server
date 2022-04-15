@@ -52,16 +52,9 @@ func ListUserHandler(um *UserManager) func(w http.ResponseWriter, r *http.Reques
 }
 
 // LoginUserHandler uses the basic auth header to authenticate a user then returns an API key to use.
-func LoginUserHandler(um *UserManager, akm *ApiKeyManager) func(w http.ResponseWriter, r *http.Request) {
+func LoginUserHandler(akm *ApiKeyManager) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _, _ := r.BasicAuth()
-
-		// TODO fix all of this shit lol
-		//uid := um.LookupUser(user)
-		//if uid == "" {
-		//	w.WriteHeader(http.StatusUnauthorized)
-		//	return
-		//}
 
 		apikey, properties := NewApiKey(24, user, time.Hour)
 		akm.RegisterKey(apikey, properties)

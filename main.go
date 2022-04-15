@@ -83,7 +83,7 @@ func main() {
 			r.Get("/", v1.ListUserHandler(um))    // GET /api/v1/user TODO this should probably be under an admin route
 			r.Route("/login", func(r chi.Router) {
 				r.Use(v1.BasicAuthMiddleware(realm, um))
-				r.Post("/", v1.LoginUserHandler(um, akm)) // TODO reminder this is shite
+				r.Post("/", v1.LoginUserHandler(akm)) // TODO reminder this is shite
 			})
 		})
 
