@@ -1,4 +1,4 @@
-package v2
+package v1
 
 import (
 	"encoding/json"
@@ -149,7 +149,7 @@ func ListMessagesHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Re
 		}
 
 		response := struct {
-			Messages []*Message `json:"messages"`
+			Messages []Message `json:"messages"`
 		}{}
 
 		response.Messages = room.ListMessages()
@@ -179,8 +179,8 @@ func SendMessageHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		var crb SendMessageBody
-		err = json.Unmarshal(b, &crb)
+		var smb SendMessageBody
+		err = json.Unmarshal(b, &smb)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -207,7 +207,7 @@ func SendMessageHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		message := NewMessage(string(b), user)
+		message := NewMessage(smb.Message, user)
 		err = room.SendMessage(message)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest) // TODO really really should have better error reporting/logging

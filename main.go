@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	v0 "github.com/eolso/chat/api/v0"
-	v2 "github.com/eolso/chat/api/v2"
+	v1 "github.com/eolso/chat/api/v1"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
@@ -23,19 +23,19 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	roomFlusher, err := v2.NewFileFlusher(filepath.Join("state", "room"))
+	roomFlusher, err := v1.NewFileFlusher(filepath.Join("state", "room"))
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create room flusher")
 	}
 
-	userFlusher, err := v2.NewFileFlusher(filepath.Join("state", "user"))
+	userFlusher, err := v1.NewFileFlusher(filepath.Join("state", "user"))
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create room flusher")
 	}
 
-	rm := v2.NewRoomManager().WithFlusher(ctx, roomFlusher)
-	um := v2.NewUserManager().WithFlusher(ctx, userFlusher)
-	akm := v2.NewApiKeyManager()
+	rm := v1.NewRoomManager().WithFlusher(ctx, roomFlusher)
+	um := v1.NewUserManager().WithFlusher(ctx, userFlusher)
+	akm := v1.NewApiKeyManager()
 
 	go func() {
 		sigchan := make(chan os.Signal)
@@ -52,7 +52,7 @@ func main() {
 			fmt.Println(err)
 		}
 
-		time.Sleep(time.Second * 5) // TODO be better than this
+		time.Sleep(time.Second * 2) // TODO be better than this
 
 		os.Exit(0)
 	}()
@@ -75,29 +75,29 @@ func main() {
 		r.Post("/", v0.SendMessageHandler(&s))
 	})
 
-	// v2 api routes
-	r.Route("/api/v2", func(r chi.Router) {
+	// v1 api routes
+	r.Route("/api/v1", func(r chi.Router) {
 		// user routes
 		r.Route("/user", func(r chi.Router) {
-			r.Post("/", v2.CreateUserHandler(um)) // POST /api/v2/user
-			r.Get("/", v2.ListUserHandler(um))    // GET /api/v2/user TODO this should probably be under an admin route
+			r.Post("/", v1.CreateUserHandler(um)) // POST /api/v1/user
+			r.Get("/", v1.ListUserHandler(um))    // GET /api/v1/user TODO this should probably be under an admin route
 			r.Route("/login", func(r chi.Router) {
-				r.Use(v2.BasicAuthMiddleware(realm, um))
-				r.Post("/", v2.LoginUserHandler(um, akm)) // TODO reminder this is shite
+				r.Use(v1.BasicAuthMiddleware(realm, um))
+				r.Post("/", v1.LoginUserHandler(um, akm)) // TODO reminder this is shite
 			})
 		})
 
 		// room routes
 		r.Route("/room", func(r chi.Router) {
-			r.Use(v2.ApiAuthMiddleware(akm))
-			r.Get("/", v2.ListRoomHandler(rm))        // GET /api/v2/room
-			r.Post("/", v2.CreateRoomHandler(um, rm)) // POST /api/v2/room TODO also fix this cuz probs shite
+			r.Use(v1.ApiAuthMiddleware(akm))
+			r.Get("/", v1.ListRoomHandler(rm))        // GET /api/v1/room
+			r.Post("/", v1.CreateRoomHandler(um, rm)) // POST /api/v1/room TODO also fix this cuz probs shite
 
 			r.Route("/{ID}", func(r chi.Router) {
-				r.Get("/", v2.GetRoomHandler(rm))       // GET /api/v2/room/{ID}
-				r.Delete("/", v2.DeleteRoomHandler(rm)) // DELETE /api/v2/room/{ID}
-				r.Get("/message", v2.ListMessagesHandler(rm))
-				r.Post("/message", v2.SendMessageHandler(rm))
+				r.Get("/", v1.GetRoomHandler(rm))       // GET /api/v1/room/{ID}
+				r.Delete("/", v1.DeleteRoomHandler(rm)) // DELETE /api/v1/room/{ID}
+				r.Get("/message", v1.ListMessagesHandler(rm))
+				r.Post("/message", v1.SendMessageHandler(rm))
 			})
 		})
 	})

@@ -1,237 +1,256 @@
 package v1
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"github.com/go-chi/chi"
-	"github.com/go-chi/render"
 	"github.com/rs/xid"
-	"io/ioutil"
-	"net/http"
-	"os"
-	"path/filepath"
+	"sync"
 	"time"
 )
 
+type RoomUser struct {
+	User        User   `json:"user"`
+	DisplayName string `json:"display_name"`
+}
+
+type Room struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Users map[string]RoomUser
+	//Users        []RoomUser `json:"users"`
+	Messages     []Message `json:"messages"`
+	OwnerID      string    `json:"owner_id"`
+	CreationTime string    `json:"creation_time"`
+	LastActivity string    `json:"last_activity"`
+}
+
 type RoomManager struct {
-	activeRooms []RoomState
-	workers     int8
-	basePath    string
-	roomPath    string
+	ActiveRooms map[string]*Room
+	ErrChan     <-chan error
+
+	lock      sync.Mutex // TODO replace this with something less dumb
+	flusher   Flusher
+	flushChan chan<- interface{}
 }
 
-type CreateRoomBody struct {
-	Name string `json:"name"`
+func (ru RoomUser) CommonName() string {
+	return ru.DisplayName
 }
 
-type RoomMember struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	JoinDate     time.Time `json:"join_date"`
-	LastActivity time.Time `json:"last_activity"`
+func (ru RoomUser) UID() string {
+	return ru.User.ID
 }
 
-type Message struct {
-	Timestamp time.Time `json:"timestamp"`
-	Author    string    `json:"author"`
-	Message   string    `json:"message"`
-}
-
-type RoomState struct {
-	ID       string       `json:"id"`
-	Name     string       `json:"name"`
-	OwnerID  string       `json:"owner_id"`
-	Members  []RoomMember `json:"members"`
-	Messages []Message    `json:"messages"`
-}
-
-func CreateRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user, _, ok := r.BasicAuth()
-		if !ok {
-			_ = render.Render(w, r, ErrUnauthorized)
-			return
-		}
-
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			_ = render.Render(w, r, ErrBadRequest)
-			return
-		}
-
-		var crb CreateRoomBody
-		err = json.Unmarshal(b, &crb)
-		if err != nil || crb.Validate() != nil {
-			_ = render.Render(w, r, ErrBadRequest)
-			return
-		}
-
-		err = rm.Create(crb.Name, user)
-		if err != nil {
-			_ = render.Render(w, r, ErrBadRequest)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}
-}
-
-func RemoveRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "ID")
-		if id == "" {
-			_ = render.Render(w, r, ErrBadRequest)
-			return
-		}
-
-		_, _, ok := r.BasicAuth()
-		if !ok {
-			_ = render.Render(w, r, ErrUnauthorized)
-			return
-		}
-
-		for i, room := range rm.activeRooms {
-			if room.ID == id {
-				rm.activeRooms = append(rm.activeRooms[:i], rm.activeRooms[i+1:]...)
-				w.WriteHeader(200)
-			}
-		}
-	}
-}
-
-func ListRoomsHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user, _, ok := r.BasicAuth()
-		if !ok {
-			_ = render.Render(w, r, ErrUnauthorized)
-			return
-		}
-
-		listRoomsResponse := struct {
-			//Rooms []string `json:"rooms"`
-			Rooms []struct {
-				Name string `json:"name"`
-				ID   string `json:"id"`
-			} `json:"rooms"`
-		}{}
-
-		for _, room := range rm.activeRooms {
-			for _, m := range room.Members {
-				if m.Name == user {
-					resp := struct {
-						Name string `json:"name"`
-						ID   string `json:"id"`
-					}{
-						Name: room.Name,
-						ID:   room.ID,
-					}
-					listRoomsResponse.Rooms = append(listRoomsResponse.Rooms, resp)
-				}
-			}
-		}
-
-		b, err := json.Marshal(listRoomsResponse)
-		if err != nil {
-			_ = render.Render(w, r, ErrBadRequest)
-		}
-
-		w.Write(b)
-	}
-}
-
-func GetRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "ID")
-		if id == "" {
-			_ = render.Render(w, r, ErrBadRequest)
-			return
-		}
-
-		_, _, ok := r.BasicAuth()
-		if !ok {
-			_ = render.Render(w, r, ErrUnauthorized)
-			return
-		}
-
-		for _, room := range rm.activeRooms {
-			if room.ID == id {
-				b, err := json.Marshal(room)
-				if err != nil {
-					_ = render.Render(w, r, ErrBadRequest)
-					return
-				}
-				w.Write(b)
-				w.WriteHeader(200)
-			}
-		}
-	}
-}
-
-func InviteRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-
-	}
-}
-
-func NewRoomManager(p string) *RoomManager {
-	return &RoomManager{
-		basePath: p,
-		roomPath: filepath.Join(p, "rooms"),
-	}
-}
-
-func (rm *RoomManager) Create(name string, owner string) error {
+// NewUser returns a User object using the name provided.
+func NewRoom(name string) *Room {
 	guid := xid.New()
+	return &Room{
+		ID:           guid.String(),
+		Name:         name,
+		Users:        make(map[string]RoomUser),
+		Messages:     nil,
+		CreationTime: time.Now().Format(time.RFC3339),
+		LastActivity: time.Now().Format(time.RFC3339),
+	}
+}
 
-	rs := RoomState{
-		ID:      guid.String(),
-		Name:    name,
-		OwnerID: owner,
-		Members: []RoomMember{
-			{
-				Name:         owner,
-				JoinDate:     time.Now(),
-				LastActivity: time.Now(),
-			},
-		},
+func (r *Room) WithOwner(oid string) *Room {
+	r.OwnerID = oid
+	return r
+}
+
+func (r *Room) CommonName() string {
+	return r.Name
+}
+
+func (r *Room) UID() string {
+	return r.ID
+}
+
+func (r *Room) AddUser(user User) error {
+	if _, ok := r.Users[user.ID]; ok {
+		return fmt.Errorf("user %s already exists in room %s", user.ID, r.ID)
 	}
 
-	rm.activeRooms = append(rm.activeRooms, rs)
+	r.Users[user.ID] = RoomUser{User: user, DisplayName: user.ID}
+
+	return nil
+}
+
+func (r *Room) GetUser(userID string) (RoomUser, bool) {
+	if _, ok := r.Users[userID]; ok {
+		return r.Users[userID], true
+	}
+
+	return RoomUser{}, false
+}
+
+func (r *Room) DeleteUser(userID string) error {
+	if _, ok := r.Users[userID]; ok {
+		delete(r.Users, userID)
+		return nil
+	}
+
+	return fmt.Errorf("user does not exist")
+}
+
+func (r *Room) SendMessage(message Message) error {
+	r.Messages = append(r.Messages, message)
+
+	return nil
+}
+
+func (r *Room) ListMessages() []Message {
+	return r.Messages
+}
+
+func (r *Room) DeleteMessage(messageID string) error {
+	for i, m := range r.Messages {
+		if m.ID == messageID {
+			r.Messages = append(r.Messages[:i], r.Messages[i+1:]...)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("message does not exist")
+}
+
+func NewRoomManager() *RoomManager {
+	return &RoomManager{
+		ActiveRooms: make(map[string]*Room),
+	}
+}
+
+func (rm *RoomManager) WithFlusher(ctx context.Context, f Flusher) *RoomManager {
+	rm.flusher = f
+	rm.flushChan, rm.ErrChan = f.Listen(ctx)
+
+	return rm
+}
+
+func (rm *RoomManager) AddRoom(room *Room) error {
+	rm.lock.Lock()
+	defer rm.lock.Unlock()
+
+	if room.ID == "" {
+		return fmt.Errorf("room must contain ID: invalid room")
+	}
+
+	if _, ok := rm.ActiveRooms[room.ID]; ok {
+		return fmt.Errorf("room already exists")
+	}
+
+	rm.ActiveRooms[room.ID] = room
+
+	return nil
+}
+
+func (rm *RoomManager) GetRoom(roomID string) (*Room, error) {
+	rm.lock.Lock()
+	defer rm.lock.Unlock()
+
+	if roomID == "" {
+		return nil, nil // json.Marshal is safe on nil :phew:
+	}
+
+	if _, ok := rm.ActiveRooms[roomID]; !ok {
+		return nil, fmt.Errorf("room does not exist")
+	}
+
+	return rm.ActiveRooms[roomID], nil
+}
+
+func (rm *RoomManager) ListRooms() []*Room {
+	rm.lock.Lock()
+	defer rm.lock.Unlock()
+
+	var rooms []*Room
+	for k, _ := range rm.ActiveRooms {
+		rooms = append(rooms, rm.ActiveRooms[k])
+	}
+
+	return rooms
+}
+
+func (rm *RoomManager) DeleteRoom(roomID string) error {
+	rm.lock.Lock()
+	defer rm.lock.Unlock()
+
+	if roomID == "" {
+		return nil
+	}
+
+	if _, ok := rm.ActiveRooms[roomID]; !ok {
+		return fmt.Errorf("room does not exist")
+	}
+
+	delete(rm.ActiveRooms, roomID)
+
+	return nil
+}
+
+func (rm *RoomManager) SendMessage(roomID string, message Message) error {
+	rm.lock.Lock()
+	defer rm.lock.Unlock()
+
+	if roomID == "" {
+		return fmt.Errorf("room must contain ID: invalid room")
+	}
+
+	if _, ok := rm.ActiveRooms[roomID]; !ok {
+		return fmt.Errorf("room does not exist")
+	}
+
+	return rm.ActiveRooms[roomID].SendMessage(message)
+}
+
+func (rm *RoomManager) DeleteMessage(roomID string, messageID string) error {
+	rm.lock.Lock()
+	defer rm.lock.Unlock()
+
+	if roomID == "" {
+		return fmt.Errorf("room must contain ID: invalid room")
+	}
+
+	if _, ok := rm.ActiveRooms[roomID]; !ok {
+		return fmt.Errorf("room does not exist")
+	}
+
+	return rm.ActiveRooms[roomID].DeleteMessage(messageID)
+}
+
+func (rm *RoomManager) Save(roomID string) error {
+	rm.lock.Lock()
+	defer rm.lock.Unlock()
+
+	if roomID == "" {
+		return nil
+	}
+
+	if _, ok := rm.ActiveRooms[roomID]; !ok {
+		return fmt.Errorf("room does not exist")
+	}
+
+	rm.flushChan <- rm.flusher.Flatten(roomID, rm.ActiveRooms[roomID])
+	delete(rm.ActiveRooms, roomID)
 
 	return nil
 }
 
 func (rm *RoomManager) Flush() error {
-	err := os.MkdirAll(rm.roomPath, 0700)
-	if err != nil {
-		return err
+	rm.lock.Lock()
+	defer rm.lock.Unlock()
+
+	if rm.flushChan == nil {
+		rm.ActiveRooms = nil
+		return nil
 	}
 
-	for _, r := range rm.activeRooms {
-		b, err := json.MarshalIndent(r, "", "  ")
-		if err != nil {
-			return err
-		}
-
-		f, err := os.Create(filepath.Join(rm.roomPath, r.ID))
-		if err != nil {
-			return err
-		}
-
-		_, err = f.Write(b)
-		if err != nil {
-			return err
-		}
-		f.Close()
+	for _, room := range rm.ActiveRooms {
+		rm.flushChan <- rm.flusher.Flatten(room.ID, room)
 	}
 
-	return nil
-}
-
-func (crb CreateRoomBody) Validate() error {
-	if crb.Name == "" {
-		return fmt.Errorf("required field missing: name")
-	}
+	rm.ActiveRooms = nil
 
 	return nil
 }

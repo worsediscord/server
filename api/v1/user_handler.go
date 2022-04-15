@@ -1,4 +1,4 @@
-package v2
+package v1
 
 import (
 	"encoding/json"
@@ -56,20 +56,20 @@ func LoginUserHandler(um *UserManager, akm *ApiKeyManager) func(w http.ResponseW
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _, _ := r.BasicAuth()
 
-		apikey := NewApiKey(24, time.Hour)
-
 		// TODO fix all of this shit lol
-		uid := um.LookupUser(user)
-		if uid == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		akm.RegisterKey(uid, apikey)
+		//uid := um.LookupUser(user)
+		//if uid == "" {
+		//	w.WriteHeader(http.StatusUnauthorized)
+		//	return
+		//}
+
+		apikey, properties := NewApiKey(24, user, time.Hour)
+		akm.RegisterKey(apikey, properties)
 
 		response := struct {
 			Apikey string `json:"apikey"`
 		}{
-			Apikey: akm.RetrieveKey(uid).Key(),
+			Apikey: apikey,
 		}
 
 		b, err := json.Marshal(response)

@@ -1,247 +1,153 @@
 package v1
 
 import (
+	"context"
 	"encoding/base64"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/go-chi/render"
-	"github.com/rs/xid"
-	"io/fs"
-	"io/ioutil"
-	"net/http"
-	"os"
-	"path/filepath"
+	"sync"
 	"time"
 )
 
-const (
-	UserCreate = "CREATE"
-	UserDelete = "DELETE"
-)
-
-type UserRequest struct {
-	Method string
-	User   User
-}
-
 type User struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Password   string    `json:"password"`
-	LastActive time.Time `json:"last_active"`
+	ID           string `json:"username"`
+	Password     string `json:"password"`
+	Rooms        []Room `json:"rooms"`
+	CreationTime string `json:"creation_time"`
+	LastActivity string `json:"last_activity"`
+
+	apikey string
 }
 
 type UserManager struct {
-	activeUsers []User
-	userPath    string
-	basePath    string
+	ActiveUsers map[string]User
+	ErrChan     <-chan error
+
+	lock      sync.Mutex // TODO replace this with something less dumb
+	flusher   Flusher
+	flushChan chan<- interface{}
 }
 
-func CreateUserHandler(userChan chan<- UserRequest) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			_ = render.Render(w, r, ErrBadRequest)
-			return
-		}
-
-		var u User
-		err = json.Unmarshal(b, &u)
-		if err != nil {
-			_ = render.Render(w, r, ErrBadRequest)
-			return
-		}
-
-		// Validate the request body
-		if u.Name == "" || u.Password == "" {
-			_ = render.Render(w, r, ErrBadRequest)
-			return
-		}
-
-		guid := xid.New()
-		u.ID = guid.String()
-		u.Password = base64.StdEncoding.EncodeToString([]byte(u.Password))
-
-		userChan <- UserRequest{Method: UserCreate, User: u}
-
-		w.WriteHeader(http.StatusOK)
+// NewUser returns a User object using the name provided.
+func NewUser(userID string) User {
+	return User{
+		ID:           userID,
+		Rooms:        nil,
+		CreationTime: time.Now().Format(time.RFC822Z),
+		LastActivity: time.Now().Format(time.RFC822Z),
 	}
 }
 
-func ListUserHandler(um *UserManager) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		//for _, u := um.activeUsers {
-		//
-		//}
-	}
-}
-
-func (u User) Validate() error {
-	if u.Name == "" {
-		return fmt.Errorf("required field missing: name")
-	} else if u.ID == "" {
-		return fmt.Errorf("required field missing: id")
-	} else if u.Password == "" {
-		return fmt.Errorf("required field missing: password")
+func (u User) WithPassword(password string) User {
+	if password != "" {
+		u.Password = base64.StdEncoding.EncodeToString([]byte(password))
 	}
 
-	return nil
+	return u
 }
 
-// NewUserManager creates
-func NewUserManager(p string) *UserManager {
+func NewUserManager() *UserManager {
 	return &UserManager{
-		basePath: p,
-		userPath: filepath.Join(p, "users"),
+		ActiveUsers: make(map[string]User),
 	}
 }
 
-func (um *UserManager) Serve() (chan<- UserRequest, <-chan error) {
-	urChan := make(chan UserRequest, 10)
-	errChan := make(chan error, 10)
+func (um *UserManager) WithFlusher(ctx context.Context, f Flusher) *UserManager {
+	um.flusher = f
+	um.flushChan, um.ErrChan = f.Listen(ctx)
 
-	go func() {
-		for ur := range urChan {
-			switch ur.Method {
-			case UserCreate:
-				if err := um.Create(ur.User); err != nil {
-					errChan <- err
-				}
-			case UserDelete:
-				if err := um.Delete(ur.User); err != nil {
-					errChan <- err
-				}
-			default:
-				// do something
-			}
-		}
-	}()
-
-	return urChan, errChan
+	return um
 }
 
-func (um *UserManager) Create(u User) error {
-	for _, user := range um.ListIDs() {
-		if user == u.ID {
-			return fmt.Errorf("user already exists")
-		}
+func (um *UserManager) AddUser(user User) error {
+	um.lock.Lock()
+	defer um.lock.Unlock()
+
+	if user.ID == "" {
+		return fmt.Errorf("user must contain ID: invalid user")
 	}
 
-	um.activeUsers = append(um.activeUsers, u)
+	if _, ok := um.ActiveUsers[user.ID]; ok {
+		return fmt.Errorf("user already exists")
+	}
+
+	um.ActiveUsers[user.ID] = user
 
 	return nil
 }
 
-func (um *UserManager) Delete(u User) error {
-	return nil
+func (um *UserManager) ListUsers() []User {
+	um.lock.Lock()
+	defer um.lock.Unlock()
+
+	var users []User
+	for k, _ := range um.ActiveUsers {
+		users = append(users, um.ActiveUsers[k])
+	}
+
+	return users
 }
 
-func (um *UserManager) Load(id string) error {
-	path := filepath.Join(um.userPath, id)
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("user not found")
+func (um *UserManager) DeleteUser(userID string) error {
+	um.lock.Lock()
+	defer um.lock.Unlock()
+
+	if userID == "" {
+		return nil
 	}
 
-	f, err := os.Open(path)
-	if err != nil {
-		return fmt.Errorf("failed to open user file")
+	if _, ok := um.ActiveUsers[userID]; !ok {
+		return fmt.Errorf("room does not exist")
 	}
 
-	b, err := ioutil.ReadAll(f)
-	if err != nil {
-		return fmt.Errorf("failed to read user file: %w", err)
-	}
-
-	var u User
-	err = json.Unmarshal(b, &u)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal user: %w", err)
-	}
-
-	if err = u.Validate(); err != nil {
-		return err
-	}
-
-	um.activeUsers = append(um.activeUsers, u)
+	delete(um.ActiveUsers, userID)
 
 	return nil
 }
 
-// Save writes the specified user to disk and removes them from the active user list.
-func (um *UserManager) Save(id string) error {
-	for _, u := range um.activeUsers {
-		if u.ID == id {
-			b, err := json.Marshal(u)
-			if err != nil {
-				return err
-			}
+func (um *UserManager) CredMap() map[string]string {
+	um.lock.Lock()
+	defer um.lock.Unlock()
 
-			return os.WriteFile(filepath.Join(um.userPath, u.ID), b, 0600)
-		}
+	credMap := make(map[string]string)
+
+	// TODO should probably key on something unique lol
+	for _, u := range um.ActiveUsers {
+		password, _ := base64.StdEncoding.DecodeString(u.Password)
+		credMap[u.ID] = string(password)
 	}
 
-	return fmt.Errorf("user not found")
+	return credMap
+}
+
+func (um *UserManager) Save(userID string) error {
+	um.lock.Lock()
+	defer um.lock.Unlock()
+
+	if userID == "" {
+		return nil
+	}
+
+	if _, ok := um.ActiveUsers[userID]; !ok {
+		return fmt.Errorf("user does not exist")
+	}
+
+	um.flushChan <- um.flusher.Flatten(userID, um.ActiveUsers[userID])
+	delete(um.ActiveUsers, userID)
+
+	return nil
 }
 
 func (um *UserManager) Flush() error {
-	err := os.MkdirAll(um.userPath, 0700)
-	if err != nil {
-		return err
+	if um.flushChan == nil {
+		um.ActiveUsers = nil
+		return nil
 	}
 
-	for _, u := range um.activeUsers {
-		path := filepath.Join(um.userPath, u.ID)
-
-		b, err := json.MarshalIndent(u, "", "  ")
-		if err != nil {
-			return err
-		}
-
-		f, err := os.Create(path)
-		if err != nil {
-			return err
-		}
-
-		_, err = f.Write(b)
-		if err != nil {
-			return err
-		}
-
-		err = f.Close()
-		if err != nil {
-			return err
-		}
+	for _, u := range um.ActiveUsers {
+		um.flushChan <- um.flusher.Flatten(u.ID, u)
 	}
+
+	um.ActiveUsers = nil
 
 	return nil
-}
-
-// ListIDs returns a list of all existing user IDs. This includes active and inactive.
-func (um *UserManager) ListIDs() []string {
-	var mergedUsers []string
-	var userMap map[string]interface{}
-
-	_ = filepath.WalkDir(um.userPath, func(path string, de fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if de.IsDir() {
-			return nil
-		}
-
-		userMap[path] = nil
-
-		return nil
-	})
-
-	for _, u := range um.activeUsers {
-		userMap[u.ID] = nil
-	}
-
-	for k, _ := range userMap {
-		mergedUsers = append(mergedUsers, k)
-	}
-
-	return mergedUsers
 }

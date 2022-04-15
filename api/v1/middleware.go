@@ -1,4 +1,4 @@
-package v2
+package v1
 
 import (
 	"context"
@@ -18,13 +18,13 @@ func ApiAuthMiddleware(akm *ApiKeyManager) func(next http.Handler) http.Handler 
 				return
 			}
 
-			userID := akm.LookupUser(key)
-			if userID == "" {
+			keyProperties, ok := akm.RetrieveKey(key)
+			if !ok {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
 
-			ctx = context.WithValue(ctx, "userID", userID)
+			ctx = context.WithValue(ctx, "userID", keyProperties.UID)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
