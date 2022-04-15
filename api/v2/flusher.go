@@ -39,7 +39,6 @@ func (f *FileFlusher) Listen(ctx context.Context) (chan<- interface{}, <-chan er
 		for {
 			select {
 			case v := <-vChan:
-				fmt.Printf("[%s]: receiving\n", f.BasePath)
 				if fd, ok := v.(fileData); ok {
 					path := filepath.Join(f.BasePath, fd.filepath)
 					errChan <- os.WriteFile(path, fd.data, 0700)

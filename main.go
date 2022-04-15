@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	v0 "github.com/eolso/chat/api/v0"
 	v2 "github.com/eolso/chat/api/v2"
 	"github.com/go-chi/chi"
@@ -9,18 +10,11 @@ import (
 	"github.com/go-chi/render"
 	"github.com/rs/zerolog/log"
 	"net/http"
+	"os"
+	"os/signal"
 	"path/filepath"
 	"time"
 )
-
-var ApikeyHeader = "apikey"
-
-var keys = []string{"garysux"}
-
-var creds = map[string]string{
-	"glarity": "isbadatrocketleague",
-	"eric":    "beesarecute",
-}
 
 const realm = "worsediscord"
 
@@ -43,6 +37,26 @@ func main() {
 	um := v2.NewUserManager().WithFlusher(ctx, userFlusher)
 	akm := v2.NewApiKeyManager()
 
+	go func() {
+		sigchan := make(chan os.Signal)
+		signal.Notify(sigchan, os.Interrupt)
+		<-sigchan
+
+		err := rm.Flush()
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		err = um.Flush()
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		time.Sleep(time.Second * 5) // TODO be better than this
+
+		os.Exit(0)
+	}()
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -52,6 +66,10 @@ func main() {
 	r.Use(middleware.Timeout(10 * time.Second))
 
 	r.Route("/api/v0/messages", func(r chi.Router) {
+		var creds = map[string]string{
+			"glarity": "isbadatrocketleague",
+			"eric":    "beesarecute",
+		}
 		r.Use(middleware.BasicAuth("chat", creds))
 		r.Get("/", v0.GetMessageHandler(&s))
 		r.Post("/", v0.SendMessageHandler(&s))

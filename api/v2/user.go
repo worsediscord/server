@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/rs/xid"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -171,8 +170,7 @@ func (um *UserManager) Flush() error {
 	}
 
 	for _, u := range um.ActiveUsers {
-		path := filepath.Join("user", u.ID)
-		um.flushChan <- um.flusher.Flatten(path, u)
+		um.flushChan <- um.flusher.Flatten(u.ID, u)
 	}
 
 	um.ActiveUsers = nil
