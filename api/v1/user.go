@@ -75,6 +75,17 @@ func (um *UserManager) AddUser(user User) error {
 	return nil
 }
 
+func (um *UserManager) GetUserByID(userID string) (User, bool) {
+	um.lock.Lock()
+	defer um.lock.Unlock()
+
+	if _, ok := um.ActiveUsers[userID]; ok {
+		return um.ActiveUsers[userID], true
+	}
+
+	return User{}, false
+}
+
 func (um *UserManager) ListUsers() []User {
 	um.lock.Lock()
 	defer um.lock.Unlock()
@@ -138,6 +149,9 @@ func (um *UserManager) Save(userID string) error {
 }
 
 func (um *UserManager) Flush() error {
+	um.lock.Lock()
+	defer um.lock.Unlock()
+
 	if um.flushChan == nil {
 		um.ActiveUsers = nil
 		return nil

@@ -94,7 +94,7 @@ func main() {
 			r.Post("/", v1.CreateRoomHandler(um, rm)) // POST /api/v1/room TODO also fix this cuz probs shite
 
 			r.Route("/{ID}", func(r chi.Router) {
-				r.Get("/", v1.GetRoomHandler(rm))       // GET /api/v1/room/{ID}
+				r.Get("/", v1.GetRoomHandler(um, rm))   // GET /api/v1/room/{ID}
 				r.Delete("/", v1.DeleteRoomHandler(rm)) // DELETE /api/v1/room/{ID}
 				r.Get("/message", v1.ListMessagesHandler(rm))
 				r.Post("/message", v1.SendMessageHandler(rm))

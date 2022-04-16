@@ -65,7 +65,7 @@ func CreateRoomHandler(um *UserManager, rm *RoomManager) func(w http.ResponseWri
 }
 
 // GetRoomHandler gets a room if it is available to the user.
-func GetRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
+func GetRoomHandler(um *UserManager, rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "ID")
 		if id == "" {
@@ -78,6 +78,18 @@ func GetRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest) // TODO maybe should be more useful here (not found vs unauthorized etc)
 			return
+		}
+
+		// TODO come up with better solution for joining rooms
+		v := r.Context().Value("userID")
+		userID, ok := v.(string)
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		user, ok := um.GetUserByID(userID)
+		if ok {
+			room.AddUser(user)
 		}
 
 		b, err := json.Marshal(room)
