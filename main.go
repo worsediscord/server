@@ -96,8 +96,15 @@ func main() {
 			r.Route("/{ID}", func(r chi.Router) {
 				r.Get("/", v1.GetRoomHandler(um, rm))   // GET /api/v1/room/{ID}
 				r.Delete("/", v1.DeleteRoomHandler(rm)) // DELETE /api/v1/room/{ID}
-				r.Get("/message", v1.ListMessagesHandler(rm))
-				r.Post("/message", v1.SendMessageHandler(rm))
+
+				r.Route("/message", func(r chi.Router) {
+					r.Get("/", v1.ListMessagesHandler(rm)) // GET /api/v1/room/{ID}/message
+					r.Post("/", v1.SendMessageHandler(rm)) // POST /api/v1/room/{ID}/message
+				})
+
+				r.Route("/member", func(r chi.Router) {
+					r.Patch("/{user}", v1.PatchRoomUserHandler(rm))
+				})
 			})
 		})
 	})
@@ -108,3 +115,6 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to start server")
 	}
 }
+
+//PATCH
+//	https://discord.com/api/v9/guilds/158727419941879818/members/@me

@@ -15,6 +15,10 @@ type SendMessageBody struct {
 	Message string `json:"message"`
 }
 
+type PatchRoomUserBody struct {
+	DisplayName string `json:"display_name"`
+}
+
 // CreateRoomHandler creates a room.
 func CreateRoomHandler(um *UserManager, rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
 	// TODO do some permission checking against an API key
@@ -89,7 +93,7 @@ func GetRoomHandler(um *UserManager, rm *RoomManager) func(w http.ResponseWriter
 		}
 		user, ok := um.GetUserByID(userID)
 		if ok {
-			room.AddUser(user)
+			_ = room.AddUser(user)
 		}
 
 		b, err := json.Marshal(room)
@@ -234,5 +238,67 @@ func SendMessageHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Req
 
 		w.WriteHeader(http.StatusOK)
 		w.Write(b)
+	}
+}
+
+func PatchRoomUserHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "ID")
+		if id == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		targetUserID := chi.URLParam(r, "user")
+		if id == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var requestBody PatchRoomUserBody
+		err = json.Unmarshal(b, &requestBody)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		// TODO do some permission checking against an API key
+		room, err := rm.GetRoom(id)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest) // TODO maybe should be more useful here (not found vs unauthorized etc)
+			return
+		}
+
+		v := r.Context().Value("userID")
+		userID, ok := v.(string)
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// Shortcut for targeting yourself
+		if targetUserID == "@me" {
+			targetUserID = userID
+		}
+
+		// TODO eventually we should do some ACL checks here. But for now you can only change your own name.
+		if userID != targetUserID {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		err = room.UpdateUserName(targetUserID, requestBody.DisplayName)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest) // TODO really really should have better error reporting/logging
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
 	}
 }

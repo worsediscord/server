@@ -14,14 +14,13 @@ type RoomUser struct {
 }
 
 type Room struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Users map[string]RoomUser
-	//Users        []RoomUser `json:"users"`
-	Messages     []Message `json:"messages"`
-	OwnerID      string    `json:"owner_id"`
-	CreationTime string    `json:"creation_time"`
-	LastActivity string    `json:"last_activity"`
+	ID           string               `json:"id"`
+	Name         string               `json:"name"`
+	Users        map[string]*RoomUser `json:"users"`
+	Messages     []Message            `json:"messages"`
+	OwnerID      string               `json:"owner_id"`
+	CreationTime string               `json:"creation_time"`
+	LastActivity string               `json:"last_activity"`
 }
 
 type RoomManager struct {
@@ -47,7 +46,7 @@ func NewRoom(name string) *Room {
 	return &Room{
 		ID:           guid.String(),
 		Name:         name,
-		Users:        make(map[string]RoomUser),
+		Users:        make(map[string]*RoomUser),
 		Messages:     nil,
 		CreationTime: time.Now().Format(time.RFC3339),
 		LastActivity: time.Now().Format(time.RFC3339),
@@ -72,17 +71,25 @@ func (r *Room) AddUser(user User) error {
 		return fmt.Errorf("user %s already exists in room %s", user.ID, r.ID)
 	}
 
-	r.Users[user.ID] = RoomUser{User: user, DisplayName: user.ID}
+	r.Users[user.ID] = &RoomUser{User: user, DisplayName: user.ID}
 
 	return nil
 }
 
-func (r *Room) GetUser(userID string) (RoomUser, bool) {
+func (r *Room) GetUser(userID string) (*RoomUser, bool) {
 	if _, ok := r.Users[userID]; ok {
 		return r.Users[userID], true
 	}
 
-	return RoomUser{}, false
+	return nil, false
+}
+
+func (r *Room) UpdateUserName(userID string, newName string) error {
+	if _, ok := r.Users[userID]; ok {
+		r.Users[userID].DisplayName = newName
+	}
+
+	return fmt.Errorf("user does not exist")
 }
 
 func (r *Room) DeleteUser(userID string) error {
