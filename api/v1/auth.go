@@ -1,4 +1,4 @@
-package v1
+package v2
 
 import (
 	"context"
@@ -21,6 +21,13 @@ type ApiKeyManager struct {
 	eventChan chan time.Time
 	lock      sync.Mutex
 }
+
+//ActiveState map[string]interface{}
+//ErrChan     <-chan error
+//
+//lock      sync.Mutex
+//flusher   Flusher
+//flushChan chan<- interface{}
 
 func NewApiKey(len int, uid string, d time.Duration) (string, ApiKeyProperties) {
 	key := string(randBytes(len))

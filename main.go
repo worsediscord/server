@@ -1,10 +1,8 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	v0 "github.com/eolso/chat/api/v0"
 	v1 "github.com/eolso/chat/api/v1"
+	"github.com/eolso/chat/memcache"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
@@ -12,109 +10,89 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"time"
 )
 
 const realm = "worsediscord"
 
 func main() {
-	var s v0.State
 
-	ctx, cancel := context.WithCancel(context.Background())
-
-	roomFlusher, err := v1.NewFileFlusher(filepath.Join("state", "room"))
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to create room flusher")
-	}
-
-	userFlusher, err := v1.NewFileFlusher(filepath.Join("state", "user"))
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to create room flusher")
-	}
-
-	rm := v1.NewRoomManager().WithFlusher(ctx, roomFlusher)
-	um := v1.NewUserManager().WithFlusher(ctx, userFlusher)
-	akm := v1.NewApiKeyManager()
-
+	var cleaner Cleaner
 	go func() {
 		sigchan := make(chan os.Signal)
 		signal.Notify(sigchan, os.Interrupt)
 		<-sigchan
 
-		err := rm.Flush()
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		err = um.Flush()
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		time.Sleep(time.Second * 2) // TODO be better than this
+		cleaner.Execute()
 
 		os.Exit(0)
 	}()
 
-	r := chi.NewRouter()
+	datastore, err := memcache.Open("state")
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create datastore")
+	}
+	cleaner.RegisterFunc(datastore.Close, "state")
 
+	roomsDoc := datastore.Document("rooms")
+	usersDoc := datastore.Document("users")
+
+	roomUsersDoc := datastore.Document("roomUsers")
+	userRoomMapDoc := datastore.Document("userRoomMap")
+
+	akm := v1.NewApiKeyManager()
+
+	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(render.SetContentType(render.ContentTypeJSON))
 	r.Use(middleware.Timeout(10 * time.Second))
 
-	r.Route("/api/v0/messages", func(r chi.Router) {
-		var creds = map[string]string{
-			"glarity": "isbadatrocketleague",
-			"eric":    "beesarecute",
-		}
-		r.Use(middleware.BasicAuth("chat", creds))
-		r.Get("/", v0.GetMessageHandler(&s))
-		r.Post("/", v0.SendMessageHandler(&s))
-	})
-
-	// v1 api routes
 	r.Route("/api/v1", func(r chi.Router) {
-		// user routes
+		// User routes
 		r.Route("/user", func(r chi.Router) {
-			r.Post("/", v1.CreateUserHandler(um)) // POST /api/v1/user
-			r.Get("/", v1.ListUserHandler(um))    // GET /api/v1/user TODO this should probably be under an admin route
+			r.Post("/", v1.CreateUserHandler(usersDoc)) // POST /api/v1/user
+			r.Get("/", v1.ListUserHandler(usersDoc))    // GET /api/v1/user
 			r.Route("/login", func(r chi.Router) {
-				r.Use(v1.BasicAuthMiddleware(realm, um))
-				r.Post("/", v1.LoginUserHandler(akm)) // TODO reminder this is shite
+				r.Use(v1.BasicAuthMiddleware(realm, usersDoc))
+				r.Post("/", v1.LoginUserHandler(akm)) // POST /api/v1/user/login
+			})
+			r.Route("/{userID}", func(r chi.Router) {
+				r.Use(v1.ApiAuthMiddleware(akm))
+				r.Get("/", v1.GetUserHandler(usersDoc))                          // GET /api/v1/user/{userID}
+				r.Delete("/", v1.DeleteUserHandler(usersDoc))                    // DELETE /api/v1/user/{userID}
+				r.Get("/room", v1.UserListRoomHandler(userRoomMapDoc, roomsDoc)) // GET /api/v1/user/{userID}/room
 			})
 		})
-
-		// room routes
+		// Room routes
 		r.Route("/room", func(r chi.Router) {
 			r.Use(v1.ApiAuthMiddleware(akm))
-			r.Get("/", v1.ListRoomHandler(rm))        // GET /api/v1/room
-			r.Post("/", v1.CreateRoomHandler(um, rm)) // POST /api/v1/room TODO also fix this cuz probs shite
+			r.Get("/", v1.ListRoomHandler(roomsDoc))                  // GET /api/v1/room
+			r.Post("/", v1.CreateRoomHandler(roomsDoc, roomUsersDoc)) // POST /api/v1/room TODO also fix this cuz probs shite
 
-			r.Route("/{ID}", func(r chi.Router) {
-				r.Get("/", v1.GetRoomHandler(um, rm))   // GET /api/v1/room/{ID}
-				r.Delete("/", v1.DeleteRoomHandler(rm)) // DELETE /api/v1/room/{ID}
+			r.Route("/{roomID}", func(r chi.Router) {
+				r.Get("/", v1.GetRoomHandler(roomsDoc))       // GET /api/v1/room/{roomID}
+				r.Delete("/", v1.DeleteRoomHandler(roomsDoc)) // DELETE /api/v1/room/{roomID}
+				r.Get("/join", v1.JoinRoomHandler(roomsDoc, roomUsersDoc))
+				r.Post("/invite", v1.InviteRoomHandler(roomsDoc))
 
 				r.Route("/message", func(r chi.Router) {
-					r.Get("/", v1.ListMessagesHandler(rm)) // GET /api/v1/room/{ID}/message
-					r.Post("/", v1.SendMessageHandler(rm)) // POST /api/v1/room/{ID}/message
+					r.Get("/", v1.ListMessagesHandler(roomsDoc))               // GET /api/v1/room/{roomID}/message
+					r.Post("/", v1.SendMessageHandler(roomsDoc, roomUsersDoc)) // POST /api/v1/room/{roomID}/message
 				})
 
-				r.Route("/member", func(r chi.Router) {
-					r.Patch("/{user}", v1.PatchRoomUserHandler(rm))
-				})
+				//r.Route("/member", func(r chi.Router) {
+				//	r.Patch("/{userID}", v1.PatchRoomUserHandler(rm))
+				//})
 			})
 		})
+
 	})
 
 	err = http.ListenAndServe(":8080", r)
 	if err != nil {
-		cancel()
+		//cancel()
 		log.Fatal().Err(err).Msg("failed to start server")
 	}
 }
-
-//PATCH
-//	https://discord.com/api/v9/guilds/158727419941879818/members/@me

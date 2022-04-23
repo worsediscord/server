@@ -1,9 +1,11 @@
-package v1
+package v2
 
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/base64"
 	"fmt"
+	"github.com/eolso/chat/memcache"
 	"net/http"
 )
 
@@ -32,7 +34,7 @@ func ApiAuthMiddleware(akm *ApiKeyManager) func(next http.Handler) http.Handler 
 }
 
 // BasicAuth implements a simple middleware handler for adding basic http auth to a route.
-func BasicAuthMiddleware(realm string, um *UserManager) func(next http.Handler) http.Handler {
+func BasicAuthMiddleware(realm string, userDoc *memcache.Document) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user, pass, ok := r.BasicAuth()
@@ -41,8 +43,33 @@ func BasicAuthMiddleware(realm string, um *UserManager) func(next http.Handler) 
 				return
 			}
 
-			credPass, credUserOk := um.CredMap()[user]
-			if !credUserOk || subtle.ConstantTimeCompare([]byte(pass), []byte(credPass)) != 1 {
+			//req := NewManagerRequest(MethodList, "", nil)
+			//v, err, _ := InterfaceError(req.SendReceive(r.Context(), userReqChan))
+			//if err != nil {
+			//	basicAuthFailed(w, realm)
+			//	return
+			//}
+
+			//vUsers, ok := v.([]interface{})
+			//if !ok {
+			//	basicAuthFailed(w, realm)
+			//	return
+			//}
+			userItems := userDoc.GetAll()
+			userMap := make(map[string][]byte)
+			for _, item := range userItems {
+				//u, ok := vUser.(User)
+				var u User
+				err := item.Decode(&u)
+				if err != nil {
+					basicAuthFailed(w, realm)
+					return
+				}
+				password, _ := base64.StdEncoding.DecodeString(u.Password)
+				userMap[u.ID] = password
+			}
+
+			if subtle.ConstantTimeCompare([]byte(pass), userMap[user]) != 1 {
 				basicAuthFailed(w, realm)
 				return
 			}

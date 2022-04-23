@@ -1,7 +1,9 @@
-package v1
+package v2
 
 import (
 	"encoding/json"
+	"errors"
+	"github.com/eolso/chat/memcache"
 	"github.com/go-chi/chi"
 	"io/ioutil"
 	"net/http"
@@ -9,6 +11,10 @@ import (
 
 type CreateRoomBody struct {
 	Name string `json:"name"`
+}
+
+type InviteUserBody struct {
+	ID string `json:"id"`
 }
 
 type SendMessageBody struct {
@@ -20,7 +26,7 @@ type PatchRoomUserBody struct {
 }
 
 // CreateRoomHandler creates a room.
-func CreateRoomHandler(um *UserManager, rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
+func CreateRoomHandler(roomDoc memcache.DocumentWriter, roomUserMapDoc memcache.DocumentWriter) func(w http.ResponseWriter, r *http.Request) {
 	// TODO do some permission checking against an API key
 	return func(w http.ResponseWriter, r *http.Request) {
 		b, err := ioutil.ReadAll(r.Body)
@@ -30,29 +36,27 @@ func CreateRoomHandler(um *UserManager, rm *RoomManager) func(w http.ResponseWri
 		}
 
 		var crb CreateRoomBody
-		err = json.Unmarshal(b, &crb)
-		if err != nil {
+		if err = json.Unmarshal(b, &crb); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		v := r.Context().Value("userID")
-		userID, ok := v.(string)
+		userID, ok := r.Context().Value("userID").(string)
 		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		room := NewRoom(crb.Name).WithOwner(userID)
-		err = rm.AddRoom(room)
-		if err != nil {
+		if err = roomDoc.Set(room.ID, room); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		// TODO I don't think we _need_ UserManager here
-		err = room.AddUser(um.ActiveUsers[userID])
-		if err != nil {
+		// Update the room -> user map with the new owner
+		var roomUsers []RoomUser
+		roomUsers = append(roomUsers, RoomUser{ID: userID, DisplayName: userID})
+		if err = roomUserMapDoc.Set(room.ID, roomUsers); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -69,31 +73,20 @@ func CreateRoomHandler(um *UserManager, rm *RoomManager) func(w http.ResponseWri
 }
 
 // GetRoomHandler gets a room if it is available to the user.
-func GetRoomHandler(um *UserManager, rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
+func GetRoomHandler(roomDoc memcache.DocumentReader) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "ID")
-		if id == "" {
+		roomID := chi.URLParam(r, "roomID")
+		if roomID == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		// TODO do some permission checking against an API key
-		room, err := rm.GetRoom(id)
+		var room Room
+		err := roomDoc.Get(roomID).Decode(&room)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest) // TODO maybe should be more useful here (not found vs unauthorized etc)
 			return
-		}
-
-		// TODO come up with better solution for joining rooms
-		v := r.Context().Value("userID")
-		userID, ok := v.(string)
-		if !ok {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		user, ok := um.GetUserByID(userID)
-		if ok {
-			_ = room.AddUser(user)
 		}
 
 		b, err := json.Marshal(room)
@@ -108,15 +101,21 @@ func GetRoomHandler(um *UserManager, rm *RoomManager) func(w http.ResponseWriter
 }
 
 // ListRoomHandler lists all rooms available to the authenticated user via the api key.
-func ListRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
+func ListRoomHandler(roomDoc memcache.DocumentReader) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO do some permission checking against an API key
-
 		response := struct {
-			Rooms []*Room `json:"rooms"`
+			Rooms []interface{} `json:"rooms"`
 		}{}
 
-		response.Rooms = rm.ListRooms()
+		roomItems := roomDoc.GetAll()
+		for _, item := range roomItems {
+			var room Room
+			if err := item.Decode(&room); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			response.Rooms = append(response.Rooms, room)
+		}
 
 		b, err := json.Marshal(response)
 		if err != nil {
@@ -130,18 +129,67 @@ func ListRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Reques
 }
 
 // DeleteRoomHandler deletes a room.
-func DeleteRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
+func DeleteRoomHandler(roomDoc memcache.DocumentWriter) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "ID")
-		if id == "" {
+		roomID := chi.URLParam(r, "roomID")
+		if roomID == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		// TODO do some permission checking against an API key
-		err := rm.DeleteRoom(id)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest) // TODO maybe should be more useful here (not found vs unauthorized etc)
+		roomDoc.Delete(roomID)
+
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func JoinRoomHandler(roomDoc memcache.DocumentReader, roomUserMap memcache.DocumentReadWriter) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		roomID := chi.URLParam(r, "roomID")
+		if roomID == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		// Fetch the authed userID from the api key context
+		userID, ok := r.Context().Value("userID").(string)
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// Verify that the room exists, and fetch data needed for later
+		var room Room
+		if err := roomDoc.Get(roomID).Decode(&room); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		// Verify that the user doesn't already exist in the room
+		var roomUserList []RoomUser
+		if err := roomUserMap.Get(roomID).Decode(&roomUserList); err != nil {
+			// This implies that the room doesn't exist and shouldn't really ever occur
+			if !errors.Is(err, memcache.ErrEmptyItem) {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		}
+		for _, roomUser := range roomUserList {
+			if userID == roomUser.ID {
+				w.WriteHeader(http.StatusConflict)
+				return
+			}
+		}
+
+		if !room.IsInvited(userID) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		roomUserList = append(roomUserList, RoomUser{ID: userID, DisplayName: userID})
+
+		if err := roomUserMap.Set(roomID, roomUserList); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
@@ -149,16 +197,53 @@ func DeleteRoomHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-func ListMessagesHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
+func InviteRoomHandler(roomDoc memcache.DocumentReadWriter) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "ID")
-		if id == "" {
+		roomID := chi.URLParam(r, "roomID")
+		if roomID == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		// TODO do some permission checking against an API key
-		room, err := rm.GetRoom(id)
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var iub InviteUserBody
+		if err = json.Unmarshal(b, &iub); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		// Verify that the room exists, and fetch data needed for later
+		var room Room
+		if err = roomDoc.Get(roomID).Decode(&room); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		room.InviteUser(iub.ID)
+		if err = roomDoc.Set(roomID, room); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func ListMessagesHandler(roomDoc memcache.DocumentReader) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		roomID := chi.URLParam(r, "roomID")
+		if roomID == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var room Room
+		err := roomDoc.Get(roomID).Decode(&room)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest) // TODO maybe should be more useful here (not found vs unauthorized etc)
 			return
@@ -181,10 +266,10 @@ func ListMessagesHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Re
 	}
 }
 
-func SendMessageHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
+func SendMessageHandler(roomDoc memcache.DocumentReadWriter, roomUserDoc memcache.DocumentReader) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "ID")
-		if id == "" {
+		roomID := chi.URLParam(r, "roomID")
+		if roomID == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -196,37 +281,51 @@ func SendMessageHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Req
 		}
 
 		var smb SendMessageBody
-		err = json.Unmarshal(b, &smb)
-		if err != nil {
+		if err = json.Unmarshal(b, &smb); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-
-		// TODO do some permission checking against an API key
-		room, err := rm.GetRoom(id)
-		if err != nil {
+		// Verify that the room exists, and fetch data needed for later
+		var room Room
+		if err = roomDoc.Get(roomID).Decode(&room); err != nil {
 			w.WriteHeader(http.StatusBadRequest) // TODO maybe should be more useful here (not found vs unauthorized etc)
 			return
 		}
 
-		v := r.Context().Value("userID")
-		userID, ok := v.(string)
+		userID, ok := r.Context().Value("userID").(string)
 		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		user, ok := room.GetUser(userID)
-		if !ok {
-			// TODO this case might be one where we should kick off a cold storage lookup
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+		// Check that the user exists in the room
+		var roomUsers []RoomUser
+		if err = roomUserDoc.Get(roomID).Decode(&roomUsers); err != nil {
+			// This implies that the room user mapping doesn't exist but the room does. This shouldn't really ever occur.
+			// TODO possibly try and recover from this state.
+			if !errors.Is(err, memcache.ErrEmptyItem) {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 		}
 
-		message := NewMessage(smb.Message, user)
+		var roomUser RoomUser
+		for _, ru := range roomUsers {
+			if userID == ru.ID {
+				roomUser = ru
+			}
+		}
+
+		message := NewMessage(smb.Message, roomUser)
 		err = room.SendMessage(message)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest) // TODO really really should have better error reporting/logging
+			return
+		}
+
+		err = roomDoc.Set(roomID, room)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
@@ -241,64 +340,65 @@ func SendMessageHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Req
 	}
 }
 
-func PatchRoomUserHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "ID")
-		if id == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		targetUserID := chi.URLParam(r, "user")
-		if id == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		var requestBody PatchRoomUserBody
-		err = json.Unmarshal(b, &requestBody)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		// TODO do some permission checking against an API key
-		room, err := rm.GetRoom(id)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest) // TODO maybe should be more useful here (not found vs unauthorized etc)
-			return
-		}
-
-		v := r.Context().Value("userID")
-		userID, ok := v.(string)
-		if !ok {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		// Shortcut for targeting yourself
-		if targetUserID == "@me" {
-			targetUserID = userID
-		}
-
-		// TODO eventually we should do some ACL checks here. But for now you can only change your own name.
-		if userID != targetUserID {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		err = room.UpdateUserName(targetUserID, requestBody.DisplayName)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest) // TODO really really should have better error reporting/logging
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}
-}
+//
+//func PatchRoomUserHandler(rm *RoomManager) func(w http.ResponseWriter, r *http.Request) {
+//	return func(w http.ResponseWriter, r *http.Request) {
+//		id := chi.URLParam(r, "ID")
+//		if id == "" {
+//			w.WriteHeader(http.StatusBadRequest)
+//			return
+//		}
+//
+//		targetUserID := chi.URLParam(r, "userID")
+//		if id == "" {
+//			w.WriteHeader(http.StatusBadRequest)
+//			return
+//		}
+//
+//		b, err := ioutil.ReadAll(r.Body)
+//		if err != nil {
+//			w.WriteHeader(http.StatusBadRequest)
+//			return
+//		}
+//
+//		var requestBody PatchRoomUserBody
+//		err = json.Unmarshal(b, &requestBody)
+//		if err != nil {
+//			w.WriteHeader(http.StatusBadRequest)
+//			return
+//		}
+//
+//		// TODO do some permission checking against an API key
+//		room, err := rm.GetRoom(id)
+//		if err != nil {
+//			w.WriteHeader(http.StatusBadRequest) // TODO maybe should be more useful here (not found vs unauthorized etc)
+//			return
+//		}
+//
+//		v := r.Context().Value("userID")
+//		userID, ok := v.(string)
+//		if !ok {
+//			w.WriteHeader(http.StatusInternalServerError)
+//			return
+//		}
+//
+//		// Shortcut for targeting yourself
+//		if targetUserID == "@me" {
+//			targetUserID = userID
+//		}
+//
+//		// TODO eventually we should do some ACL checks here. But for now you can only change your own name.
+//		if userID != targetUserID {
+//			w.WriteHeader(http.StatusUnauthorized)
+//			return
+//		}
+//
+//		err = room.UpdateUserName(targetUserID, requestBody.DisplayName)
+//		if err != nil {
+//			w.WriteHeader(http.StatusBadRequest) // TODO really really should have better error reporting/logging
+//			return
+//		}
+//
+//		w.WriteHeader(http.StatusOK)
+//	}
+//}

@@ -1,4 +1,4 @@
-package v1
+package v2
 
 import (
 	"github.com/rs/xid"
@@ -13,14 +13,14 @@ type Message struct {
 	Timestamp string `json:"timestamp"`
 }
 
-func NewMessage(text string, id Identifiable) Message {
+func NewMessage(text string, author Identifiable) Message {
 	guid := xid.New()
 
 	return Message{
 		ID:        guid.String(),
 		Text:      text,
-		AuthorID:  id.UID(),
-		Author:    id.CommonName(),
+		AuthorID:  author.UID(),
+		Author:    author.CommonName(),
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 }
