@@ -3,6 +3,7 @@ package v2
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/eolso/chat/memcache"
 	"github.com/go-chi/chi"
 	"io/ioutil"
@@ -54,8 +55,8 @@ func CreateRoomHandler(roomDoc memcache.DocumentWriter, roomUserMapDoc memcache.
 		}
 
 		// Update the room -> user map with the new owner
-		var roomUsers []RoomUser
-		roomUsers = append(roomUsers, RoomUser{ID: userID, DisplayName: userID})
+		var roomUsers []Identity
+		roomUsers = append(roomUsers, Identity{ID: userID, Name: userID})
 		if err = roomUserMapDoc.Set(room.ID, roomUsers); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -143,7 +144,7 @@ func DeleteRoomHandler(roomDoc memcache.DocumentWriter) func(w http.ResponseWrit
 	}
 }
 
-func JoinRoomHandler(roomDoc memcache.DocumentReader, roomUserMap memcache.DocumentReadWriter) func(w http.ResponseWriter, r *http.Request) {
+func JoinRoomHandler(roomDoc memcache.DocumentReadWriter, roomUserMap memcache.DocumentReadWriter) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		roomID := chi.URLParam(r, "roomID")
 		if roomID == "" {
@@ -166,7 +167,7 @@ func JoinRoomHandler(roomDoc memcache.DocumentReader, roomUserMap memcache.Docum
 		}
 
 		// Verify that the user doesn't already exist in the room
-		var roomUserList []RoomUser
+		var roomUserList []Identity
 		if err := roomUserMap.Get(roomID).Decode(&roomUserList); err != nil {
 			// This implies that the room doesn't exist and shouldn't really ever occur
 			if !errors.Is(err, memcache.ErrEmptyItem) {
@@ -186,9 +187,19 @@ func JoinRoomHandler(roomDoc memcache.DocumentReader, roomUserMap memcache.Docum
 			return
 		}
 
-		roomUserList = append(roomUserList, RoomUser{ID: userID, DisplayName: userID})
+		roomUserList = append(roomUserList, Identity{ID: userID, Name: userID})
 
 		if err := roomUserMap.Set(roomID, roomUserList); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if err := room.SendSystemMessage(fmt.Sprintf("%s has joined the room. Say hi!", userID)); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if err := roomDoc.Set(roomID, room); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -234,7 +245,7 @@ func InviteRoomHandler(roomDoc memcache.DocumentReadWriter) func(w http.Response
 	}
 }
 
-func ListMessagesHandler(roomDoc memcache.DocumentReader) func(w http.ResponseWriter, r *http.Request) {
+func ListMessagesHandler(roomDoc memcache.DocumentReader, roomUserDoc memcache.DocumentReader) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		roomID := chi.URLParam(r, "roomID")
 		if roomID == "" {
@@ -246,6 +257,34 @@ func ListMessagesHandler(roomDoc memcache.DocumentReader) func(w http.ResponseWr
 		err := roomDoc.Get(roomID).Decode(&room)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest) // TODO maybe should be more useful here (not found vs unauthorized etc)
+			return
+		}
+
+		userID, ok := r.Context().Value("userID").(string)
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// Check that the user exists in the room
+		var roomUsers []Identity
+		if err = roomUserDoc.Get(roomID).Decode(&roomUsers); err != nil {
+			// This implies that the room user mapping doesn't exist but the room does. This shouldn't really ever occur.
+			// TODO possibly try and recover from this state.
+			if !errors.Is(err, memcache.ErrEmptyItem) {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		}
+
+		var found bool
+		for _, ru := range roomUsers {
+			if userID == ru.ID {
+				found = true
+			}
+		}
+		if !found {
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
@@ -285,6 +324,7 @@ func SendMessageHandler(roomDoc memcache.DocumentReadWriter, roomUserDoc memcach
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
 		// Verify that the room exists, and fetch data needed for later
 		var room Room
 		if err = roomDoc.Get(roomID).Decode(&room); err != nil {
@@ -299,7 +339,7 @@ func SendMessageHandler(roomDoc memcache.DocumentReadWriter, roomUserDoc memcach
 		}
 
 		// Check that the user exists in the room
-		var roomUsers []RoomUser
+		var roomUsers []Identity
 		if err = roomUserDoc.Get(roomID).Decode(&roomUsers); err != nil {
 			// This implies that the room user mapping doesn't exist but the room does. This shouldn't really ever occur.
 			// TODO possibly try and recover from this state.
@@ -309,11 +349,18 @@ func SendMessageHandler(roomDoc memcache.DocumentReadWriter, roomUserDoc memcach
 			}
 		}
 
-		var roomUser RoomUser
+		var roomUser Identity
+		var found bool
 		for _, ru := range roomUsers {
 			if userID == ru.ID {
 				roomUser = ru
+				found = true
 			}
+		}
+
+		if !found {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
 		}
 
 		message := NewMessage(smb.Message, roomUser)

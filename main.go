@@ -16,7 +16,6 @@ import (
 const realm = "worsediscord"
 
 func main() {
-
 	var cleaner Cleaner
 	go func() {
 		sigchan := make(chan os.Signal)
@@ -38,7 +37,7 @@ func main() {
 	usersDoc := datastore.Document("users")
 
 	roomUsersDoc := datastore.Document("roomUsers")
-	userRoomMapDoc := datastore.Document("userRoomMap")
+	userRoomsDoc := datastore.Document("userRooms")
 
 	akm := v1.NewApiKeyManager()
 
@@ -60,9 +59,9 @@ func main() {
 			})
 			r.Route("/{userID}", func(r chi.Router) {
 				r.Use(v1.ApiAuthMiddleware(akm))
-				r.Get("/", v1.GetUserHandler(usersDoc))                          // GET /api/v1/user/{userID}
-				r.Delete("/", v1.DeleteUserHandler(usersDoc))                    // DELETE /api/v1/user/{userID}
-				r.Get("/room", v1.UserListRoomHandler(userRoomMapDoc, roomsDoc)) // GET /api/v1/user/{userID}/room
+				r.Get("/", v1.GetUserHandler(usersDoc))                        // GET /api/v1/user/{userID}
+				r.Delete("/", v1.DeleteUserHandler(usersDoc))                  // DELETE /api/v1/user/{userID}
+				r.Get("/room", v1.UserListRoomHandler(userRoomsDoc, roomsDoc)) // GET /api/v1/user/{userID}/room
 			})
 		})
 		// Room routes
@@ -72,13 +71,13 @@ func main() {
 			r.Post("/", v1.CreateRoomHandler(roomsDoc, roomUsersDoc)) // POST /api/v1/room TODO also fix this cuz probs shite
 
 			r.Route("/{roomID}", func(r chi.Router) {
-				r.Get("/", v1.GetRoomHandler(roomsDoc))       // GET /api/v1/room/{roomID}
-				r.Delete("/", v1.DeleteRoomHandler(roomsDoc)) // DELETE /api/v1/room/{roomID}
-				r.Get("/join", v1.JoinRoomHandler(roomsDoc, roomUsersDoc))
-				r.Post("/invite", v1.InviteRoomHandler(roomsDoc))
+				r.Get("/", v1.GetRoomHandler(roomsDoc))                    // GET /api/v1/room/{roomID}
+				r.Delete("/", v1.DeleteRoomHandler(roomsDoc))              // DELETE /api/v1/room/{roomID}
+				r.Get("/join", v1.JoinRoomHandler(roomsDoc, roomUsersDoc)) // GET /api/v1/room/{roomID}/join
+				r.Post("/invite", v1.InviteRoomHandler(roomsDoc))          // POST /api/v1/room/{roomID}/invite
 
 				r.Route("/message", func(r chi.Router) {
-					r.Get("/", v1.ListMessagesHandler(roomsDoc))               // GET /api/v1/room/{roomID}/message
+					r.Get("/", v1.ListMessagesHandler(roomsDoc, roomUsersDoc)) // GET /api/v1/room/{roomID}/message
 					r.Post("/", v1.SendMessageHandler(roomsDoc, roomUsersDoc)) // POST /api/v1/room/{roomID}/message
 				})
 
