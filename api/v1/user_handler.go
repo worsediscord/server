@@ -1,13 +1,17 @@
-package v2
+package v1
 
 import (
 	"encoding/json"
-	"errors"
-	"github.com/eolso/chat/memcache"
+	"github.com/eolso/memcache"
 	"github.com/go-chi/chi"
 	"io/ioutil"
 	"net/http"
 	"time"
+)
+
+const (
+	userMetadataKey = "metadata"
+	userRoomsKey    = "rooms"
 )
 
 type CreateUserBody struct {
@@ -16,11 +20,11 @@ type CreateUserBody struct {
 }
 
 type UserListRoomResponse struct {
-	Name string
-	ID   string
+	Name string `json:"name"`
+	ID   string `json:"id"`
 }
 
-func CreateUserHandler(userDoc memcache.DocumentWriter) func(w http.ResponseWriter, r *http.Request) {
+func CreateUserHandler(usersCollection *memcache.Collection) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		b, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -29,18 +33,27 @@ func CreateUserHandler(userDoc memcache.DocumentWriter) func(w http.ResponseWrit
 		}
 
 		var cub CreateUserBody
-		err = json.Unmarshal(b, &cub)
-		if err != nil {
+		if err = json.Unmarshal(b, &cub); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		user := NewUser(cub.Name).WithPassword(cub.Password)
-		err = userDoc.Set(cub.Name, user)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+		// Create the room collection
+		thisUserCollection, ok := usersCollection.GetCollection(cub.Name)
+		if ok {
+			w.WriteHeader(http.StatusConflict)
 			return
+		} else {
+			thisUserCollection = usersCollection.Collection(cub.Name)
 		}
+
+		user := NewUser(cub.Name).WithPassword(cub.Password)
+
+		// Insert the user metadata into the collection
+		thisUserCollection.Document(userMetadataKey).Set("_", user)
+
+		// Insert an empty rooms list into the user's document.
+		thisUserCollection.Document(userRoomsKey)
 
 		b, err = json.Marshal(user)
 		if err != nil {
@@ -53,7 +66,7 @@ func CreateUserHandler(userDoc memcache.DocumentWriter) func(w http.ResponseWrit
 	}
 }
 
-func GetUserHandler(userDoc memcache.DocumentReader) func(w http.ResponseWriter, r *http.Request) {
+func GetUserHandler(usersCollection *memcache.Collection) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := chi.URLParam(r, "userID")
 		if userID == "" {
@@ -61,14 +74,21 @@ func GetUserHandler(userDoc memcache.DocumentReader) func(w http.ResponseWriter,
 			return
 		}
 
-		var u User
-		err := userDoc.Get(userID).Decode(&u)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+		thisUserCollection, ok := usersCollection.GetCollection(userID)
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
-		b, err := json.Marshal(u)
+		userDoc, ok := thisUserCollection.GetDocument(userMetadataKey)
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		user, _ := userDoc.Get("_")
+
+		b, err := json.Marshal(user)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -79,24 +99,33 @@ func GetUserHandler(userDoc memcache.DocumentReader) func(w http.ResponseWriter,
 	}
 }
 
-func ListUserHandler(userDoc memcache.DocumentReader) func(w http.ResponseWriter, r *http.Request) {
+func ListUserHandler(usersCollection *memcache.Collection) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// TODO do some permission checking against an API key
-		response := struct {
-			Users []interface{} `json:"users"`
-		}{}
+		//response := struct {
+		//	Users []interface{} `json:"users"`
+		//}{}
 
-		userItems := userDoc.GetAll()
-		for _, item := range userItems {
-			var user User
-			if err := item.Decode(&user); err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			response.Users = append(response.Users, user)
+		usersMap := usersCollection.GetCollections()
+		for name, documents := range usersMap.Map() {
+
 		}
+		//fmt.Printf("%#v\n", usersCollection)
+		//fmt.Printf("%#v\n", userDocs.)
+		//fmt.Printf("%#v\n", usersCollection.Document("Lemuel17"))
+		//
+		//fmt.Println(userDocs.Map())
+		//for _, doc := range userDocs {
+		//	var md UserMetadata
+		//	if err := doc.Get("metadata").Decode(&md); err != nil {
+		//		w.WriteHeader(http.StatusInternalServerError)
+		//		return
+		//	}
+		//	user := BuildUser(md, nil)
+		//	response.Users = append(response.Users, user)
+		//}
 
-		b, err := json.Marshal(response)
+		b, err := json.Marshal(userDocs.Map())
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -107,78 +136,85 @@ func ListUserHandler(userDoc memcache.DocumentReader) func(w http.ResponseWriter
 	}
 }
 
-func DeleteUserHandler(userDoc memcache.DocumentWriter) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID := chi.URLParam(r, "userID")
-		if userID == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
+//func DeleteUserHandler(userCollection *memcache.Collection) func(w http.ResponseWriter, r *http.Request) {
+//	return func(w http.ResponseWriter, r *http.Request) {
+//		userID := chi.URLParam(r, "userID")
+//		if userID == "" {
+//			w.WriteHeader(http.StatusBadRequest)
+//			return
+//		}
+//
+//		userDoc := userCollection.Get(userID)
+//		if userDoc == nil {
+//			w.WriteHeader(http.StatusNotFound)
+//			return
+//		}
+//
+//		userDoc.Delete(userID)
+//
+//		w.WriteHeader(http.StatusOK)
+//	}
+//}
 
-		userDoc.Delete(userID)
-
-		w.WriteHeader(http.StatusOK)
-	}
-}
-
-func UserListRoomHandler(userRoomMapDoc memcache.DocumentReadWriter, roomDoc memcache.DocumentReader) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID := chi.URLParam(r, "userID")
-		if userID == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		authedUserID, ok := r.Context().Value("userID").(string)
-		if !ok {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		if userID == "@me" {
-			userID = authedUserID
-		}
-
-		var roomIDs []string
-		if err := userRoomMapDoc.Get(userID).Decode(&roomIDs); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		var response []UserListRoomResponse
-		var room Room
-		var mapUpdated bool
-		for i, roomID := range roomIDs {
-			if err := roomDoc.Get(roomID).Decode(&room); err != nil {
-				// The room no longer exists, delete it.
-				if errors.Is(err, memcache.ErrEmptyItem) {
-					roomIDs = append(roomIDs[:i], roomIDs[i+1:]...)
-					mapUpdated = true
-				} else {
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-			}
-			response = append(response, UserListRoomResponse{Name: room.Name, ID: room.ID})
-		}
-
-		if mapUpdated {
-			if err := userRoomMapDoc.Set(userID, roomIDs); err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-		}
-
-		b, err := json.Marshal(response)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		w.Write(b)
-	}
-}
+//func UserListRoomHandler(userCollection *memcache.Collection, roomCollection *memcache.Collection) func(w http.ResponseWriter, r *http.Request) {
+//	return func(w http.ResponseWriter, r *http.Request) {
+//		userID := chi.URLParam(r, "userID")
+//		if userID == "" {
+//			w.WriteHeader(http.StatusBadRequest)
+//			return
+//		}
+//
+//		authedUserID, ok := r.Context().Value("userID").(string)
+//		if !ok {
+//			w.WriteHeader(http.StatusUnauthorized)
+//			return
+//		}
+//
+//		if userID == "@me" {
+//			userID = authedUserID
+//		}
+//
+//		userDoc := userCollection.Get(userID)
+//		if userDoc == nil {
+//			w.WriteHeader(http.StatusNotFound)
+//			return
+//		}
+//
+//		var rooms []Identity
+//		if err := userDoc.Get("rooms").Decode(&rooms); err != nil {
+//			w.WriteHeader(http.StatusInternalServerError)
+//			return
+//		}
+//
+//		var updated bool
+//		for i, room := range rooms {
+//			if roomCollection.Get(room.ID) == nil {
+//				// The room no longer exists, delete it.
+//				rooms = append(rooms[:i], rooms[i+1:]...)
+//			}
+//		}
+//		if updated {
+//			if err := userDoc.Set("rooms", rooms); err != nil {
+//				w.WriteHeader(http.StatusInternalServerError)
+//				return
+//			}
+//		}
+//
+//		response := struct {
+//			Rooms []Identity `json:"rooms"`
+//		}{}
+//		response.Rooms = rooms
+//
+//		b, err := json.Marshal(response)
+//		if err != nil {
+//			w.WriteHeader(http.StatusInternalServerError)
+//			return
+//		}
+//
+//		w.WriteHeader(http.StatusOK)
+//		w.Write(b)
+//	}
+//}
 
 // LoginUserHandler uses the basic auth header to authenticate a user then returns an API key to use.
 func LoginUserHandler(akm *ApiKeyManager) func(w http.ResponseWriter, r *http.Request) {

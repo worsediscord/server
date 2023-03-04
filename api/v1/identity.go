@@ -1,8 +1,8 @@
-package v2
+package v1
 
 type Identity struct {
-	Name string
-	ID   string
+	Name string `json:"name"`
+	ID   string `json:"id"`
 }
 
 type Identifiable interface {

@@ -1,4 +1,6 @@
 github.com/coreos/go-systemd/v22 v22.3.2/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
+github.com/eolso/memcache v0.0.0-20220501062927-10a730408c04 h1:16IzHoMfU7tpsNJIuTBRKwZpvSKMB+scnnWXC+zedYE=
+github.com/eolso/memcache v0.0.0-20220501062927-10a730408c04/go.mod h1:HGAx2lurxiTS1RhOk0PWpcyZB2VGIaWUeRZS/mdtGeE=
 github.com/go-chi/chi v1.5.4 h1:QHdzF2szwjqVV4wmByUnTcsbIg7UGaQ0tPF2t5GcAIs=
 github.com/go-chi/chi v1.5.4/go.mod h1:uaf8YgoFazUOkPBG7fxPftUylNumIev9awIWOENIuEg=
 github.com/go-chi/render v1.0.1 h1:4/5tis2cKaNdnv9zFLfXzcquC9HbeZgCnxGnKrltBS8=
