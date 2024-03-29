@@ -1,0 +1,4 @@
+github.com/eolso/threadsafe v0.0.0-20240107200101-12eeebc6f1dc h1:mvmeZFqAMFRqLp0ZhS58mvD5b6KsNJ2DsKwFEfy6kcw=
+github.com/eolso/threadsafe v0.0.0-20240107200101-12eeebc6f1dc/go.mod h1:RTB7Uo8r+9gpIcLXvsuRAv+pgabBfpuBqAooOvOGhSQ=
+github.com/go-chi/chi/v5 v5.0.12 h1:9euLV5sTrTNTRUU9POmDUvfxyj6LAABLUcEWO+JJb4s=
+github.com/go-chi/chi/v5 v5.0.12/go.mod h1:DslCQbL2OYiznFReuXYUmQ2hGd1aDpCnlMNITLSKoi8=
