@@ -1,15 +1,18 @@
 package api
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/worsediscord/server/storage"
 )
 
 type User struct {
+	Id       string `json:"id"`
 	Name     string `json:"name"`
 	Password string `json:"password"`
 }
@@ -23,7 +26,21 @@ func CreateUserHandler(store storage.Writer[string, User]) func(w http.ResponseW
 			return
 		}
 
-		err := store.Write(user.Name, user)
+		if !user.Validate() {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var b strings.Builder
+		encoder := base64.NewEncoder(base64.StdEncoding, &b)
+		if _, err := encoder.Write([]byte(user.Name)); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		user.Id = b.String()
+
+		err := store.Write(user.Id, user)
 		switch {
 		case errors.Is(err, storage.ErrConflict):
 			w.WriteHeader(http.StatusConflict)
@@ -75,4 +92,16 @@ func GetUserHandler(store storage.Reader[string, User]) func(w http.ResponseWrit
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+}
+
+func (u User) Validate() bool {
+	if u.Name == "" {
+		return false
+	}
+
+	if u.Password == "" {
+		return false
+	}
+
+	return true
 }

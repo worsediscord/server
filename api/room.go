@@ -25,6 +25,11 @@ func CreateRoomHandler(store storage.Writer[string, Room]) func(w http.ResponseW
 			return
 		}
 
+		if !room.Validate() {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
 		var b strings.Builder
 		encoder := base64.NewEncoder(base64.StdEncoding, &b)
 		if _, err := encoder.Write([]byte(room.Name)); err != nil {
@@ -86,4 +91,12 @@ func GetRoomHandler(store storage.Reader[string, Room]) func(w http.ResponseWrit
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+}
+
+func (r Room) Validate() bool {
+	if r.Name == "" {
+		return false
+	}
+
+	return true
 }
