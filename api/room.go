@@ -1,15 +1,18 @@
 package api
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/worsediscord/server/storage"
 )
 
 type Room struct {
+	Id   string `json:"id"`
 	Name string `json:"name"`
 }
 
@@ -22,7 +25,16 @@ func CreateRoomHandler(store storage.Writer[string, Room]) func(w http.ResponseW
 			return
 		}
 
-		err := store.Write(room.Name, room)
+		var b strings.Builder
+		encoder := base64.NewEncoder(base64.StdEncoding, &b)
+		if _, err := encoder.Write([]byte(room.Name)); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		room.Id = b.String()
+
+		err := store.Write(room.Id, room)
 		switch {
 		case errors.Is(err, storage.ErrConflict):
 			w.WriteHeader(http.StatusConflict)
@@ -36,14 +48,14 @@ func CreateRoomHandler(store storage.Writer[string, Room]) func(w http.ResponseW
 
 func ListRoomHandler(store storage.Reader[string, Room]) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		users, err := store.ReadAll()
+		rooms, err := store.ReadAll()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err = json.NewEncoder(w).Encode(users); err != nil {
+		if err = json.NewEncoder(w).Encode(rooms); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -55,9 +67,9 @@ func ListRoomHandler(store storage.Reader[string, Room]) func(w http.ResponseWri
 
 func GetRoomHandler(store storage.Reader[string, Room]) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		username := chi.URLParam(r, "id")
+		id := chi.URLParam(r, "id")
 
-		user, err := store.Read(username)
+		room, err := store.Read(id)
 		switch {
 		case errors.Is(err, storage.ErrNotFound):
 			w.WriteHeader(http.StatusNotFound)
@@ -66,7 +78,7 @@ func GetRoomHandler(store storage.Reader[string, Room]) func(w http.ResponseWrit
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err = json.NewEncoder(w).Encode(user); err != nil {
+		if err = json.NewEncoder(w).Encode(room); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
