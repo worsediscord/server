@@ -12,8 +12,9 @@ import (
 )
 
 type Room struct {
-	Id   string `json:"id"`
-	Name string `json:"name"`
+	Id       string    `json:"id"`
+	Name     string    `json:"name"`
+	Messages []Message `json:"-"`
 }
 
 func CreateRoomHandler(store storage.Writer[string, Room]) func(w http.ResponseWriter, r *http.Request) {

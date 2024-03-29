@@ -15,6 +15,7 @@ func main() {
 
 	userStore := storage.NewMap[string, api.User]()
 	roomStore := storage.NewMap[string, api.Room]()
+	messageStore := storage.NewMap[string, api.Message]()
 
 	r.Route("/api", func(r chi.Router) {
 		r.Route("/users", func(r chi.Router) {
@@ -28,7 +29,12 @@ func main() {
 			r.Get("/", api.ListRoomHandler(roomStore))
 			r.Post("/", api.CreateRoomHandler(roomStore))
 
-			r.Get("/{id}", api.GetRoomHandler(roomStore))
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", api.GetRoomHandler(roomStore))
+
+				r.Get("/messages", api.ListMessageHandler(messageStore))
+				r.Post("/messages", api.CreateMessageHandler(messageStore, roomStore, userStore))
+			})
 		})
 	})
 
