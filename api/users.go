@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/worsediscord/server/storage"
@@ -31,14 +30,7 @@ func CreateUserHandler(store storage.Writer[string, User]) func(w http.ResponseW
 			return
 		}
 
-		var b strings.Builder
-		encoder := base64.NewEncoder(base64.StdEncoding, &b)
-		if _, err := encoder.Write([]byte(user.Name)); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		user.Id = b.String()
+		user.Id = base64.StdEncoding.EncodeToString([]byte(user.Name))
 
 		err := store.Write(user.Id, user)
 		switch {

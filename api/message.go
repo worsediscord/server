@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -50,14 +49,7 @@ func CreateMessageHandler(
 			return
 		}
 
-		var b strings.Builder
-		if _, err := base64.NewEncoder(base64.StdEncoding, &b).
-			Write([]byte(fmt.Sprintf("%s%d", roomId, time.Now().UnixNano()))); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		message.Id = b.String()
+		message.Id = base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s%d", roomId, time.Now().UnixNano())))
 		message.Timestamp = time.Now()
 
 		if err := messageStore.Write(message.Id, message); err != nil {
