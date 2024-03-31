@@ -16,7 +16,7 @@ type User struct {
 	Password string `json:"password"`
 }
 
-func CreateUserHandler(store storage.Writer[string, User]) func(w http.ResponseWriter, r *http.Request) {
+func CreateUserHandler(store storage.Writer[string, User]) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var user User
 
@@ -44,7 +44,7 @@ func CreateUserHandler(store storage.Writer[string, User]) func(w http.ResponseW
 	}
 }
 
-func ListUserHandler(store storage.Reader[string, User]) func(w http.ResponseWriter, r *http.Request) {
+func ListUserHandler(store storage.Reader[string, User]) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		users, err := store.ReadAll()
 		if err != nil {
@@ -63,7 +63,7 @@ func ListUserHandler(store storage.Reader[string, User]) func(w http.ResponseWri
 	}
 }
 
-func GetUserHandler(store storage.Reader[string, User]) func(w http.ResponseWriter, r *http.Request) {
+func GetUserHandler(store storage.Reader[string, User]) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := chi.URLParam(r, "id")
 

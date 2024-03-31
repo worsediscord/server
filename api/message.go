@@ -14,8 +14,8 @@ import (
 
 type Message struct {
 	Id        string    `json:"id"`
-	UserId    string    `json:"userId"`
-	RoomId    string    `json:"roomId"`
+	UserId    string    `json:"user_id"`
+	RoomId    string    `json:"room_id"`
 	Content   string    `json:"content"`
 	Timestamp time.Time `json:"timestamp"`
 }
@@ -24,7 +24,7 @@ func CreateMessageHandler(
 	messageStore storage.Writer[string, Message],
 	roomStore storage.Reader[string, Room],
 	userStore storage.Reader[string, User],
-) func(w http.ResponseWriter, r *http.Request) {
+) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		roomId := chi.URLParam(r, "id")
 
@@ -62,7 +62,7 @@ func CreateMessageHandler(
 	}
 }
 
-func ListMessageHandler(store storage.Reader[string, Message]) func(w http.ResponseWriter, r *http.Request) {
+func ListMessageHandler(store storage.Reader[string, Message]) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		roomId := chi.URLParam(r, "id")
 

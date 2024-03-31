@@ -16,7 +16,7 @@ type Room struct {
 	Messages []Message `json:"-"`
 }
 
-func CreateRoomHandler(store storage.Writer[string, Room]) func(w http.ResponseWriter, r *http.Request) {
+func CreateRoomHandler(store storage.Writer[string, Room]) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var room Room
 
@@ -44,7 +44,7 @@ func CreateRoomHandler(store storage.Writer[string, Room]) func(w http.ResponseW
 	}
 }
 
-func ListRoomHandler(store storage.Reader[string, Room]) func(w http.ResponseWriter, r *http.Request) {
+func ListRoomHandler(store storage.Reader[string, Room]) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rooms, err := store.ReadAll()
 		if err != nil {
@@ -63,7 +63,7 @@ func ListRoomHandler(store storage.Reader[string, Room]) func(w http.ResponseWri
 	}
 }
 
-func GetRoomHandler(store storage.Reader[string, Room]) func(w http.ResponseWriter, r *http.Request) {
+func GetRoomHandler(store storage.Reader[string, Room]) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 
