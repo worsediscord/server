@@ -1,22 +1,24 @@
 package api
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/worsediscord/server/storage"
 )
 
 type Room struct {
-	Id       string    `json:"id"`
+	Id       int64     `json:"id"`
 	Name     string    `json:"name"`
 	Messages []Message `json:"-"`
 }
 
-func CreateRoomHandler(store storage.Writer[string, Room]) http.HandlerFunc {
+var roomCounter int64
+
+func CreateRoomHandler(store storage.ReadWriter[int64, Room]) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var room Room
 
@@ -30,12 +32,16 @@ func CreateRoomHandler(store storage.Writer[string, Room]) http.HandlerFunc {
 			return
 		}
 
-		room.Id = base64.StdEncoding.EncodeToString([]byte(room.Name))
+		room.Id = 1000000000000 + roomCounter
+		roomCounter += 1
 
-		err := store.Write(room.Id, room)
-		switch {
-		case errors.Is(err, storage.ErrConflict):
+		if _, err := store.Read(room.Id); err == nil {
 			w.WriteHeader(http.StatusConflict)
+			return
+		}
+
+		if err := store.Write(room.Id, room); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
@@ -44,7 +50,7 @@ func CreateRoomHandler(store storage.Writer[string, Room]) http.HandlerFunc {
 	}
 }
 
-func ListRoomHandler(store storage.Reader[string, Room]) http.HandlerFunc {
+func ListRoomHandler(store storage.Reader[int64, Room]) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rooms, err := store.ReadAll()
 		if err != nil {
@@ -63,11 +69,16 @@ func ListRoomHandler(store storage.Reader[string, Room]) http.HandlerFunc {
 	}
 }
 
-func GetRoomHandler(store storage.Reader[string, Room]) http.HandlerFunc {
+func GetRoomHandler(store storage.Reader[int64, Room]) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
+		idStr := chi.URLParam(r, "id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 
-		room, err := store.Read(id)
+		room, err := store.Read(int64(id))
 		switch {
 		case errors.Is(err, storage.ErrNotFound):
 			w.WriteHeader(http.StatusNotFound)

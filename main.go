@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/worsediscord/server/api"
 	"github.com/worsediscord/server/storage"
@@ -12,11 +12,12 @@ import (
 
 func main() {
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(chimiddleware.Logger)
 
 	userStore := storage.NewMap[string, api.User]()
-	roomStore := storage.NewMap[string, api.Room]()
+	roomStore := storage.NewMap[int64, api.Room]()
 	messageStore := storage.NewMap[string, api.Message]()
+	keyStore := storage.NewMap[string, api.ApiKeyProperties]()
 
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"https://*", "http://*"},
@@ -29,13 +30,20 @@ func main() {
 
 	r.Route("/api", func(r chi.Router) {
 		r.Route("/users", func(r chi.Router) {
-			r.Get("/", api.ListUserHandler(userStore))
 			r.Post("/", api.CreateUserHandler(userStore))
+			r.Post("/login", api.LoginUserHandler(userStore, keyStore))
 
-			r.Get("/{id}", api.GetUserHandler(userStore))
+			// Authenticated routes
+			r.Route("/", func(r chi.Router) {
+				r.Use(api.SessionAuthMiddleware(keyStore))
+				r.Get("/", api.ListUserHandler(userStore))
+				r.Get("/{id}", api.GetUserHandler(userStore))
+			})
 		})
 
 		r.Route("/rooms", func(r chi.Router) {
+			r.Use(api.SessionAuthMiddleware(keyStore))
+
 			r.Get("/", api.ListRoomHandler(roomStore))
 			r.Post("/", api.CreateRoomHandler(roomStore))
 

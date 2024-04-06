@@ -14,7 +14,7 @@ func NewMap[K comparable, V any]() *Map[K, V] {
 	}
 }
 
-func (m Map[K, V]) Read(key K) (V, error) {
+func (m *Map[K, V]) Read(key K) (V, error) {
 	v, ok := m.tsMap.Get(key)
 	if !ok {
 		return *new(V), ErrNotFound
@@ -23,15 +23,11 @@ func (m Map[K, V]) Read(key K) (V, error) {
 	return v, nil
 }
 
-func (m Map[K, V]) ReadAll() ([]V, error) {
+func (m *Map[K, V]) ReadAll() ([]V, error) {
 	return m.tsMap.Values(), nil
 }
 
-func (m Map[K, V]) Write(key K, v V) error {
-	if _, ok := m.tsMap.Get(key); ok {
-		return ErrConflict
-	}
-
+func (m *Map[K, V]) Write(key K, v V) error {
 	m.tsMap.Set(key, v)
 	return nil
 }
