@@ -4,11 +4,20 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/worsediscord/server/services/auth"
 	"github.com/worsediscord/server/services/user"
 )
+
+var alphaNumericRegex *regexp.Regexp
+
+// swagger:model CreateUserRequest
+type CreateUserRequest struct {
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
+}
 
 // swagger:response UserResponse
 type UserResponse struct {
@@ -33,6 +42,10 @@ type UserLoginResponse struct {
 	Token string `json:"token"`
 }
 
+func init() {
+	alphaNumericRegex = regexp.MustCompile("^[a-zA-Z0-9_.]*$")
+}
+
 // swagger:route POST /users users createUser
 // # Create a user
 //
@@ -47,7 +60,7 @@ type UserLoginResponse struct {
 //	  500: Error
 func (s *Server) handleUserCreate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var request user.CreateUserOpts
+		var request CreateUserRequest
 
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -64,7 +77,8 @@ func (s *Server) handleUserCreate() http.HandlerFunc {
 			return
 		}
 
-		if err := s.UserService.Create(r.Context(), request); err != nil {
+		opts := user.CreateUserOpts{Username: request.Username, Password: request.Password}
+		if err := s.UserService.Create(r.Context(), opts); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -166,25 +180,25 @@ func (s *Server) handleUserGet() http.HandlerFunc {
 //	  401: Error
 func (s *Server) handleUserLogin() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var reqUser user.User
+		var request UserLoginRequest
 
-		if err := json.NewDecoder(r.Body).Decode(&reqUser); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		storedUser, err := s.UserService.GetUserById(r.Context(), user.GetUserByIdOpts{Id: reqUser.Username})
+		storedUser, err := s.UserService.GetUserById(r.Context(), user.GetUserByIdOpts{Id: request.Username})
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		if reqUser.Password != storedUser.Password {
+		if request.Password != storedUser.Password {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		key := auth.NewApiKey(24, time.Hour*1, reqUser)
+		key := auth.NewApiKey(24, time.Hour*1, storedUser)
 		if err = s.AuthService.RegisterKey(key.Token(), key); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -199,4 +213,20 @@ func (s *Server) handleUserLogin() http.HandlerFunc {
 
 		return
 	}
+}
+
+func (c CreateUserRequest) Validate() bool {
+	if c.Username == "" {
+		return false
+	}
+
+	if !alphaNumericRegex.MatchString(c.Username) {
+		return false
+	}
+
+	if c.Password == "" {
+		return false
+	}
+
+	return true
 }
