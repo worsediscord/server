@@ -1,53 +1,40 @@
 package api
 
 import (
-	"encoding/base64"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/worsediscord/server/storage"
+	"github.com/worsediscord/server/services/message"
+	"github.com/worsediscord/server/services/room"
+	"github.com/worsediscord/server/services/user"
 )
 
-type Message struct {
-	Id        string `json:"id"`
-	UserId    string `json:"user_id"`
-	RoomId    int64  `json:"room_id"`
-	Content   string `json:"content"`
-	Timestamp int64  `json:"timestamp"`
+type CreateMessageRequest struct {
+	Content string `json:"content"`
 }
 
-func CreateMessageHandler(
-	messageStore storage.Writer[string, Message],
-	roomStore storage.Reader[int64, Room],
-	userStore storage.Reader[string, User],
-) http.HandlerFunc {
+type ListMessageResponse []message.Message
+
+func (s *Server) handleMessageCreate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		roomIdStr := chi.URLParam(r, "id")
-		roomId, err := strconv.Atoi(roomIdStr)
+		roomId, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
 		// Verify the room exists
-		// TODO make a middleware do this
-		if _, err := roomStore.Read(int64(roomId)); err != nil && errors.Is(err, storage.ErrNotFound) {
+		if _, err = s.RoomService.GetRoomById(r.Context(), room.GetRoomByIdOpts{Id: int64(roomId)}); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		var message Message
-		if err := json.NewDecoder(r.Body).Decode(&message); err != nil {
+		var request CreateMessageRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-
-		message.RoomId = int64(roomId)
 
 		// Verify the user exists
 		userId, ok := r.Context().Value("userID").(string)
@@ -56,54 +43,52 @@ func CreateMessageHandler(
 			return
 		}
 
-		if _, err := userStore.Read(userId); err != nil && errors.Is(err, storage.ErrNotFound) {
+		if _, err = s.UserService.GetUserById(r.Context(), user.GetUserByIdOpts{Id: userId}); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		message.UserId = userId
-		message.Id = base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s%d", roomId, time.Now().UnixNano())))
-		message.Timestamp = time.Now().UnixMilli()
+		opts := message.CreateMessageOpts{
+			UserId:  userId,
+			RoomId:  int64(roomId),
+			Content: request.Content,
+		}
 
-		if err := messageStore.Write(message.Id, message); err != nil {
+		if err = s.MessageService.Create(r.Context(), opts); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
 		return
 	}
 }
 
-func ListMessageHandler(store storage.Reader[string, Message]) http.HandlerFunc {
+func (s *Server) handleMessageList() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		roomIdStr := chi.URLParam(r, "id")
-		roomId, err := strconv.Atoi(roomIdStr)
+		roomId, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
-		allMessages, err := store.ReadAll()
+		allMessages, err := s.MessageService.List(r.Context(), message.ListMessageOpts{})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		var messages []Message
-		for _, message := range allMessages {
-			if message.RoomId == int64(roomId) {
-				messages = append(messages, message)
+		var response ListMessageResponse
+		for _, msg := range allMessages {
+			if msg.RoomId == int64(roomId) {
+				response = append(response, *msg)
 			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(messages); err != nil {
+		if err := json.NewEncoder(w).Encode(response); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-
-		w.WriteHeader(http.StatusOK)
 
 		return
 	}

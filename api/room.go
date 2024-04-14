@@ -2,59 +2,43 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/worsediscord/server/storage"
+	"github.com/worsediscord/server/services/room"
 )
 
-type Room struct {
-	Id       int64     `json:"id"`
-	Name     string    `json:"name"`
-	Messages []Message `json:"-"`
-}
-
-var roomCounter int64
-
-func CreateRoomHandler(store storage.ReadWriter[int64, Room]) http.HandlerFunc {
+func (s *Server) handleRoomCreate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var room Room
+		var request room.CreateRoomOpts
 
-		if err := json.NewDecoder(r.Body).Decode(&room); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		if !room.Validate() {
+		if !request.Validate() {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		room.Id = 1000000000000 + roomCounter
-		roomCounter += 1
-
-		if _, err := store.Read(room.Id); err == nil {
-			w.WriteHeader(http.StatusConflict)
-			return
-		}
-
-		if err := store.Write(room.Id, room); err != nil {
+		if err := s.RoomService.Create(r.Context(), request); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
+		// TODO return id probably
+
 		return
 	}
 }
 
-func ListRoomHandler(store storage.Reader[int64, Room]) http.HandlerFunc {
+func (s *Server) handleRoomList() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		rooms, err := store.ReadAll()
+		rooms, err := s.RoomService.List(r.Context())
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -64,43 +48,31 @@ func ListRoomHandler(store storage.Reader[int64, Room]) http.HandlerFunc {
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
 		return
 	}
 }
 
-func GetRoomHandler(store storage.Reader[int64, Room]) http.HandlerFunc {
+func (s *Server) handleRoomGet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := chi.URLParam(r, "id")
-		id, err := strconv.Atoi(idStr)
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
-		room, err := store.Read(int64(id))
-		switch {
-		case errors.Is(err, storage.ErrNotFound):
+		response, err := s.RoomService.GetRoomById(r.Context(), room.GetRoomByIdOpts{Id: int64(id)})
+		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err = json.NewEncoder(w).Encode(room); err != nil {
+		if err = json.NewEncoder(w).Encode(response); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
 		return
 	}
-}
-
-func (r Room) Validate() bool {
-	if r.Name == "" {
-		return false
-	}
-
-	return true
 }
