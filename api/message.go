@@ -10,7 +10,7 @@ import (
 	"github.com/worsediscord/server/services/user"
 )
 
-type CreateMessageRequest struct {
+type MessageCreateRequest struct {
 	Content string `json:"content"`
 }
 
@@ -30,7 +30,7 @@ func (s *Server) handleMessageCreate() http.HandlerFunc {
 			return
 		}
 
-		var request CreateMessageRequest
+		var request MessageCreateRequest
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
