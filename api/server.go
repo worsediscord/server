@@ -2,7 +2,7 @@
 //
 // HTTP API for interacting with a worsediscord server.
 //
-//	Schemes: http, https
+//	Schemes: https
 //	BasePath: /api
 //	Version: 0.0.1
 //	Host: test.beesarecute.com
@@ -15,17 +15,21 @@
 //
 //	Security:
 //	- api_key:
+//	- basic_auth:
 //
 //	SecurityDefinitions:
 //	api_key:
-//	 type: apiKey
-//	 name: Authorization
-//	 in: header
+//	  type: apiKey
+//	  name: Authorization
+//	  in: header
+//	basic_auth:
+//	  type: basic
 //
 // swagger:meta
 package api
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/worsediscord/server/services/auth"
@@ -41,6 +45,7 @@ type Server struct {
 	AuthService    auth.Service
 
 	mux        *http.ServeMux
+	logHandler slog.Handler
 	middleware []Middleware
 }
 
@@ -49,6 +54,7 @@ func NewServer(
 	roomService room.Service,
 	messageService message.Service,
 	authService auth.Service,
+	logHandler slog.Handler,
 	middleware ...Middleware,
 ) *Server {
 	s := Server{
@@ -56,6 +62,7 @@ func NewServer(
 		RoomService:    roomService,
 		MessageService: messageService,
 		AuthService:    authService,
+		logHandler:     logHandler,
 		mux:            http.NewServeMux(),
 		middleware:     middleware,
 	}

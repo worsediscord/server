@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"time"
@@ -13,8 +14,8 @@ import (
 
 var alphaNumericRegex *regexp.Regexp
 
-// swagger:model CreateUserRequest
-type CreateUserRequest struct {
+// swagger:model UserCreateRequest
+type UserCreateRequest struct {
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
 }
@@ -53,21 +54,31 @@ func init() {
 //	- application/json
 //	Produces:
 //	- application/json
+//	Parameters:
+//	+ name: credentials
+//	  in: body
+//	  description: username and password to authenticate with
+//	  required: true
+//	  type: UserCreateRequest
 //	Responses:
 //	  200:
 //	  400: Error
 //	  409: Error
 //	  500: Error
 func (s *Server) handleUserCreate() http.HandlerFunc {
+	logger := slog.New(s.logHandler).With(slog.String("handle", "UserCreate"))
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		var request CreateUserRequest
+		var request UserCreateRequest
 
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			logger.Error("failed to decode request", slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		if !request.Validate() {
+			logger.Error("request failed validation")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -162,7 +173,7 @@ func (s *Server) handleUserGet() http.HandlerFunc {
 	}
 }
 
-// swagger:route GET /users/login users loginUser
+// swagger:route POST /users/login users loginUser
 // # Logs in a user
 //
 //	Consumes:
@@ -215,7 +226,7 @@ func (s *Server) handleUserLogin() http.HandlerFunc {
 	}
 }
 
-func (c CreateUserRequest) Validate() bool {
+func (c UserCreateRequest) Validate() bool {
 	if c.Username == "" {
 		return false
 	}
