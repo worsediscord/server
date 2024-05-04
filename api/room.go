@@ -9,6 +9,7 @@ import (
 )
 
 type RoomCreateRequest struct {
+	// The name of the room to create. This does not need to be globally unique.
 	Name string `json:"name"`
 }
 
@@ -150,7 +151,7 @@ func (s *Server) handleRoomDelete() http.HandlerFunc {
 			return
 		}
 
-		if err = s.RoomService.Delete(r.Context(), room.DeleteRoomOpts{int64(id)}); err != nil {
+		if err = s.RoomService.Delete(r.Context(), room.DeleteRoomOpts{Id: int64(id)}); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}

@@ -12,13 +12,19 @@ import (
 )
 
 type MessageCreateRequest struct {
+	// The content of the message.
 	Content string `json:"content"`
 }
 
 type MessageResponse struct {
-	UserId    string `json:"user_id,omitempty"`
-	Content   string `json:"content,omitempty"`
-	Timestamp int64  `json:"timestamp,omitempty"`
+	// The unique username of the message author.
+	UserId string `json:"user_id,omitempty"`
+
+	// The content of the message.
+	Content string `json:"content,omitempty"`
+
+	// Time since epoch in milliseconds.
+	Timestamp int64 `json:"timestamp,omitempty"`
 }
 
 // handleMessageCreate creates a message

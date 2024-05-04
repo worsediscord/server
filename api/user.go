@@ -12,21 +12,19 @@ import (
 )
 
 type UserCreateRequest struct {
+	// The globally unique username of the user.
 	Username string `json:"username,omitempty"`
+
+	// The password to set. Must be at least 8 characters long.
 	Password string `json:"password,omitempty"`
 }
 
 type UserResponse struct {
-	// The globally unique username of the user
+	// The globally unique username of the user.
 	Username string `json:"username"`
 
-	// The nickname of the user
+	// The nickname of the user.
 	Nickname string `json:"nickname"`
-}
-
-type UserLoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
 }
 
 type UserLoginResponse struct {
@@ -214,14 +212,7 @@ func (s *Server) handleUserLogin() http.HandlerFunc {
 //	@Router		/users/{id} [delete]
 func (s *Server) handleUserDelete() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var request UserLoginRequest
-
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		if err := s.UserService.Delete(r.Context(), user.DeleteUserOpts{Id: request.Username}); err != nil {
+		if err := s.UserService.Delete(r.Context(), user.DeleteUserOpts{Id: r.PathValue("id")}); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
