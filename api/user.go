@@ -84,6 +84,7 @@ func (s *Server) handleUserCreate() http.HandlerFunc {
 //	@Tags		users
 //	@Accept		json
 //	@Produce	json
+//	@Security	ApiKey
 //	@Success	200	{array}	UserResponse
 //	@Failure	400
 //	@Failure	500
@@ -117,7 +118,8 @@ func (s *Server) handleUserList() http.HandlerFunc {
 //	@Tags		users
 //	@Accept		json
 //	@Produce	json
-//	@Param		id	path		string	true	"id to fetch"
+//	@Param		id	path	string	true	"id to fetch"
+//	@Security	ApiKey
 //	@Success	200	{object}	UserResponse
 //	@Failure	401
 //	@Failure	404
@@ -156,8 +158,8 @@ func (s *Server) handleUserGet() http.HandlerFunc {
 //	@Tags		users
 //	@Accept		json
 //	@Produce	json
-//	@Param		credentials	body		UserLoginRequest	true	"username and password to authenticate with"
-//	@Success	200			{object}	UserLoginResponse
+//	@Security	BasicAuth
+//	@Success	200	{object}	UserLoginResponse
 //	@Failure	401
 //	@Failure	500
 //	@Router		/users/login [post]
@@ -199,11 +201,12 @@ func (s *Server) handleUserLogin() http.HandlerFunc {
 
 // handleUserDelete deletes a user
 //
-//	@Summary	Gets a user
+//	@Summary	Deletes a user
 //	@Tags		users
 //	@Accept		json
 //	@Produce	json
 //	@Param		id	path	string	true	"id to delete"
+//	@Security	ApiKey
 //	@Success	200
 //	@Failure	401
 //	@Failure	404

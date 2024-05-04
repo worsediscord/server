@@ -29,6 +29,7 @@ type MessageResponse struct {
 //	@Produce	json
 //	@Param		id		path	string					true	"room id to create message in"
 //	@Param		content	body	MessageCreateRequest	true	"content to create message with"
+//	@Security	ApiKey
 //	@Success	200
 //	@Failure	400
 //	@Failure	401
@@ -92,6 +93,7 @@ func (s *Server) handleMessageCreate() http.HandlerFunc {
 //	@Accept		json
 //	@Produce	json
 //	@Param		id	path	string	true	"room id to list messages from"
+//	@Security	ApiKey
 //	@Success	200	{array}	MessageResponse
 //	@Failure	401
 //	@Failure	404

@@ -24,7 +24,7 @@ type RoomResponse struct {
 //	@Accept		json
 //	@Produce	json
 //	@Param		name	body	RoomCreateRequest	true	"room data"
-//	@Security	BasicAuth
+//	@Security	ApiKey
 //	@Success	200
 //	@Failure	400
 //	@Failure	401
@@ -62,6 +62,7 @@ func (s *Server) handleRoomCreate() http.HandlerFunc {
 //	@Tags		rooms
 //	@Accept		json
 //	@Produce	json
+//	@Security	ApiKey
 //	@Success	200
 //	@Failure	401
 //	@Failure	500
@@ -97,6 +98,7 @@ func (s *Server) handleRoomList() http.HandlerFunc {
 //	@Accept		json
 //	@Produce	json
 //	@Param		id	path	string	true	"id to fetch"
+//	@Security	ApiKey
 //	@Success	200
 //	@Failure	401
 //	@Failure	404
@@ -127,6 +129,19 @@ func (s *Server) handleRoomGet() http.HandlerFunc {
 	}
 }
 
+// handleRoomDelete deletes a room
+//
+//	@Summary	Deletes a room
+//	@Tags		rooms
+//	@Accept		json
+//	@Produce	json
+//	@Param		id	path	string	true	"id to delete"
+//	@Security	ApiKey
+//	@Success	200
+//	@Failure	401
+//	@Failure	404
+//	@Failure	500
+//	@Router		/rooms/{id} [delete]
 func (s *Server) handleRoomDelete() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
