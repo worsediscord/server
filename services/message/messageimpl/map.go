@@ -21,7 +21,7 @@ func NewMap() *Map {
 }
 
 func (m *Map) Create(_ context.Context, opts message.CreateMessageOpts) error {
-	id := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s%d", opts.RoomId, time.Now().UnixMilli())))
+	id := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%d%d", opts.RoomId, time.Now().UnixMilli())))
 
 	msg := message.Message{
 		Id:        id,
