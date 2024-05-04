@@ -34,7 +34,7 @@ func SessionAuthMiddleware(authService auth.Service) func(next http.Handler) htt
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
-			token := r.Header.Get("Authorization")
+			token := r.Header.Get("x-api-key")
 			if token == "" {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
