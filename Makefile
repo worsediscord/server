@@ -2,7 +2,7 @@ all:
 	go build -C ./cmd/ -o ../bin/wdscmd
 
 swag:
-	swag fmt && swag init -d api/ -g server.go -ot yaml -o ./
+	swag fmt && swag init -d api/ -g server.go -ot json -o ./api/docs
 
 test:
 	go test -v ./...
