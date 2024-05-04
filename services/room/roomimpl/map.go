@@ -44,7 +44,7 @@ func (m *Map) List(_ context.Context) ([]*room.Room, error) {
 	return m.data.Values(), nil
 }
 
-func (m *Map) Delete() {
-	//TODO implement me
-	panic("implement me")
+func (m *Map) Delete(_ context.Context, opts room.DeleteRoomOpts) error {
+	m.data.Delete(opts.Id)
+	return nil
 }

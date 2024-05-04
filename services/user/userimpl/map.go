@@ -22,6 +22,10 @@ func (m *Map) Create(_ context.Context, opts user.CreateUserOpts) error {
 		return user.ErrConflict
 	}
 
+	if err := opts.Validate(); err != nil {
+		return err
+	}
+
 	u := user.User{
 		Username: opts.Username,
 		Nickname: opts.Username,
@@ -46,7 +50,7 @@ func (m *Map) List(_ context.Context) ([]*user.User, error) {
 	return m.data.Values(), nil
 }
 
-func (m *Map) Delete() {
-	//TODO implement me
-	panic("implement me")
+func (m *Map) Delete(_ context.Context, opts user.DeleteUserOpts) error {
+	m.data.Delete(opts.Id)
+	return nil
 }
