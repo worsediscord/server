@@ -82,7 +82,7 @@ func (s *Server) handleMessageCreate() http.HandlerFunc {
 			Content: request.Content,
 		}
 
-		if err = s.MessageService.Create(r.Context(), opts); err != nil {
+		if _, err = s.MessageService.Create(r.Context(), opts); err != nil {
 			logger.Error("failed to create message", slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
 			return

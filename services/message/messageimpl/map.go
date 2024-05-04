@@ -20,7 +20,7 @@ func NewMap() *Map {
 	}
 }
 
-func (m *Map) Create(_ context.Context, opts message.CreateMessageOpts) error {
+func (m *Map) Create(_ context.Context, opts message.CreateMessageOpts) (*message.Message, error) {
 	id := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%d%d", opts.RoomId, time.Now().UnixMilli())))
 
 	msg := message.Message{
@@ -33,7 +33,7 @@ func (m *Map) Create(_ context.Context, opts message.CreateMessageOpts) error {
 
 	m.data.Set(id, &msg)
 
-	return nil
+	return &msg, nil
 }
 
 func (m *Map) GetMessageById(_ context.Context, opts message.GetMessageByIdOpts) (*message.Message, error) {
