@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -34,6 +35,8 @@ type MessageResponse struct {
 //	@Failure	500
 //	@Router		/rooms/{id}/messages [post]
 func (s *Server) handleMessageCreate() http.HandlerFunc {
+	logger := slog.New(s.logHandler).With(slog.String("handle", "MessageCreate"))
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		roomId, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
@@ -56,6 +59,7 @@ func (s *Server) handleMessageCreate() http.HandlerFunc {
 		// Verify the user exists
 		userId, ok := r.Context().Value("userID").(string)
 		if !ok {
+			logger.Error("failed to lookup apikey in request context")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -72,6 +76,7 @@ func (s *Server) handleMessageCreate() http.HandlerFunc {
 		}
 
 		if err = s.MessageService.Create(r.Context(), opts); err != nil {
+			logger.Error("failed to create message", slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}

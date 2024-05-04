@@ -180,7 +180,7 @@ func (s *Server) handleUserLogin() http.HandlerFunc {
 			return
 		}
 
-		key := auth.NewApiKey(24, time.Hour*1, storedUser)
+		key := auth.NewApiKey(24, time.Hour*1, storedUser.Username)
 		if err = s.AuthService.RegisterKey(key.Token(), key); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
