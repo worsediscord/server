@@ -14,8 +14,25 @@ type MessageCreateRequest struct {
 	Content string `json:"content"`
 }
 
-type ListMessageResponse []message.Message
+type MessageResponse struct {
+	UserId    string `json:"user_id,omitempty"`
+	Content   string `json:"content,omitempty"`
+	Timestamp int64  `json:"timestamp,omitempty"`
+}
 
+// handleMessageCreate creates a message
+//
+//	@Summary	Create a message
+//	@Tags		messages
+//	@Accept		json
+//	@Produce	json
+//	@Param		id		path	string					true	"room id to create message in"
+//	@Param		content	body	MessageCreateRequest	true	"content to create message with"
+//	@Success	200
+//	@Failure	400
+//	@Failure	401
+//	@Failure	500
+//	@Router		/rooms/{id}/messages [post]
 func (s *Server) handleMessageCreate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		roomId, err := strconv.Atoi(r.PathValue("id"))
@@ -63,6 +80,18 @@ func (s *Server) handleMessageCreate() http.HandlerFunc {
 	}
 }
 
+// handleMessageList returns a list of messages for a given room
+//
+//	@Summary	List messages
+//	@Tags		messages
+//	@Accept		json
+//	@Produce	json
+//	@Param		id	path	string	true	"room id to list messages from"
+//	@Success	200	{array}	MessageResponse
+//	@Failure	401
+//	@Failure	404
+//	@Failure	500
+//	@Router		/rooms/{id}/messages [get]
 func (s *Server) handleMessageList() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		roomId, err := strconv.Atoi(r.PathValue("id"))
@@ -77,10 +106,15 @@ func (s *Server) handleMessageList() http.HandlerFunc {
 			return
 		}
 
-		var response ListMessageResponse
+		//var response ListMessageResponse
+		var response []MessageResponse
 		for _, msg := range allMessages {
 			if msg.RoomId == int64(roomId) {
-				response = append(response, *msg)
+				response = append(response, MessageResponse{
+					UserId:    msg.UserId,
+					Content:   msg.Content,
+					Timestamp: msg.Timestamp,
+				})
 			}
 		}
 

@@ -5,22 +5,17 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"regexp"
 	"time"
 
 	"github.com/worsediscord/server/services/auth"
 	"github.com/worsediscord/server/services/user"
 )
 
-var alphaNumericRegex *regexp.Regexp
-
-// swagger:model UserCreateRequest
 type UserCreateRequest struct {
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
 }
 
-// swagger:response UserResponse
 type UserResponse struct {
 	// The globally unique username of the user
 	Username string `json:"username"`
@@ -29,42 +24,27 @@ type UserResponse struct {
 	Nickname string `json:"nickname"`
 }
 
-// swagger:response UsersResponse
-type UsersResponse []UserResponse
-
-// swagger:model UserLoginRequest
 type UserLoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
-// swagger:response UserLoginResponse
 type UserLoginResponse struct {
 	Token string `json:"token"`
 }
 
-func init() {
-	alphaNumericRegex = regexp.MustCompile("^[a-zA-Z0-9_.]*$")
-}
-
-// swagger:route POST /users users createUser
-// # Create a user
+// handleUserCreate creates a user
 //
-//	Consumes:
-//	- application/json
-//	Produces:
-//	- application/json
-//	Parameters:
-//	+ name: credentials
-//	  in: body
-//	  description: username and password to authenticate with
-//	  required: true
-//	  type: UserCreateRequest
-//	Responses:
-//	  200:
-//	  400: Error
-//	  409: Error
-//	  500: Error
+//	@Summary	Create a user
+//	@Tags		users
+//	@Accept		json
+//	@Produce	json
+//	@Param		credentials	body	UserCreateRequest	true	"username and password to create user with"
+//	@Success	200
+//	@Failure	400
+//	@Failure	409
+//	@Failure	500
+//	@Router		/users [post]
 func (s *Server) handleUserCreate() http.HandlerFunc {
 	logger := slog.New(s.logHandler).With(slog.String("handle", "UserCreate"))
 
@@ -98,17 +78,16 @@ func (s *Server) handleUserCreate() http.HandlerFunc {
 	}
 }
 
-// swagger:route GET /users users listUsers
-// # Gets all users
+// handleUserList returns a list of users
 //
-//	Consumes:
-//	- application/json
-//	Produces:
-//	- application/json
-//	Responses:
-//	  200: UsersResponse
-//	  401: Error
-//	  500: Error
+//	@Summary	List users
+//	@Tags		users
+//	@Accept		json
+//	@Produce	json
+//	@Success	200	{array}	UserResponse
+//	@Failure	400
+//	@Failure	500
+//	@Router		/users [get]
 func (s *Server) handleUserList() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		users, err := s.UserService.List(r.Context())
@@ -116,7 +95,7 @@ func (s *Server) handleUserList() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 
-		var response UsersResponse
+		var response []UserResponse
 		for i := range users {
 			response = append(response, UserResponse{Username: users[i].Username, Nickname: users[i].Nickname})
 		}
@@ -132,20 +111,18 @@ func (s *Server) handleUserList() http.HandlerFunc {
 	}
 }
 
-// swagger:route GET /users/{id} users getUserById
-// # Gets a user
+// handleUserGet gets a user
 //
-//	Produces:
-//	- application/json
-//	Parameters:
-//	+ name: id
-//	  in: path
-//	  description: id to fetch
-//	  required: true
-//	  type: string
-//	Responses:
-//	  200: UserResponse
-//	  401: Error
+//	@Summary	Gets a user
+//	@Tags		users
+//	@Accept		json
+//	@Produce	json
+//	@Param		id	path		string	true	"id to fetch"
+//	@Success	200	{object}	UserResponse
+//	@Failure	401
+//	@Failure	404
+//	@Failure	500
+//	@Router		/users/{id} [get]
 func (s *Server) handleUserGet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
@@ -173,38 +150,32 @@ func (s *Server) handleUserGet() http.HandlerFunc {
 	}
 }
 
-// swagger:route POST /users/login users loginUser
-// # Logs in a user
+// handleUserLogin logs in a user and returns a token
 //
-//	Consumes:
-//	- application/json
-//	Produces:
-//	- application/json
-//	Parameters:
-//	+ name: credentials
-//	  in: body
-//	  description: username and password to authenticate with
-//	  required: true
-//	  type: UserLoginRequest
-//	Responses:
-//	  200: UserLoginResponse
-//	  401: Error
+//	@Summary	Logs in a user
+//	@Tags		users
+//	@Accept		json
+//	@Produce	json
+//	@Param		credentials	body		UserLoginRequest	true	"username and password to authenticate with"
+//	@Success	200			{object}	UserLoginResponse
+//	@Failure	401
+//	@Failure	500
+//	@Router		/users/login [post]
 func (s *Server) handleUserLogin() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var request UserLoginRequest
-
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		username, password, ok := r.BasicAuth()
+		if !ok {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		storedUser, err := s.UserService.GetUserById(r.Context(), user.GetUserByIdOpts{Id: request.Username})
+		storedUser, err := s.UserService.GetUserById(r.Context(), user.GetUserByIdOpts{Id: username})
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		if request.Password != storedUser.Password {
+		if password != storedUser.Password {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -215,10 +186,40 @@ func (s *Server) handleUserLogin() http.HandlerFunc {
 			return
 		}
 
-		resp := UserLoginResponse{Token: key.Token()}
+		response := UserLoginResponse{Token: key.Token()}
 
-		if err = json.NewEncoder(w).Encode(resp); err != nil {
+		if err = json.NewEncoder(w).Encode(response); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+}
+
+// handleUserDelete deletes a user
+//
+//	@Summary	Gets a user
+//	@Tags		users
+//	@Accept		json
+//	@Produce	json
+//	@Param		id	path	string	true	"id to delete"
+//	@Success	200
+//	@Failure	401
+//	@Failure	404
+//	@Failure	500
+//	@Router		/users/{id} [delete]
+func (s *Server) handleUserDelete() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var request UserLoginRequest
+
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if err := s.UserService.Delete(r.Context(), user.DeleteUserOpts{Id: request.Username}); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 

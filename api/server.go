@@ -1,42 +1,31 @@
-// Package api worsediscord server API.
+// Package api
 //
-// HTTP API for interacting with a worsediscord server.
-//
-//	Schemes: https
-//	BasePath: /api
-//	Version: 0.0.1
-//	Host: test.beesarecute.com
-//
-//	Consumes:
-//	- application/json
-//
-//	Produces:
-//	- application/json
-//
-//	Security:
-//	- api_key:
-//	- basic_auth:
-//
-//	SecurityDefinitions:
-//	api_key:
-//	  type: apiKey
-//	  name: Authorization
-//	  in: header
-//	basic_auth:
-//	  type: basic
-//
-// swagger:meta
+//	@Title						worsediscord server API
+//	@Version					0.1.0
+//	@Description				HTTP API for interacting with a worsediscord server.
+//	@Host						test.beesarecute.com
+//	@BasePath					/api
+//	@Schemes					https
+//	@Accept						application/json
+//	@Produce					application/json
+//	@SecurityDefinitions.Basic	BasicAuth
+//	@SecurityDefinitions.ApiKey	ApiKey
+//	@In							header
+//	@Name						x-api-key
 package api
 
 import (
 	"log/slog"
 	"net/http"
+	"regexp"
 
 	"github.com/worsediscord/server/services/auth"
 	"github.com/worsediscord/server/services/message"
 	"github.com/worsediscord/server/services/room"
 	"github.com/worsediscord/server/services/user"
 )
+
+var alphaNumericRegex *regexp.Regexp
 
 type Server struct {
 	UserService    user.Service
@@ -47,6 +36,10 @@ type Server struct {
 	mux        *http.ServeMux
 	logHandler slog.Handler
 	middleware []Middleware
+}
+
+func init() {
+	alphaNumericRegex = regexp.MustCompile("^[a-zA-Z0-9_.]*$")
 }
 
 func NewServer(
@@ -71,11 +64,15 @@ func NewServer(
 
 	s.mux.Handle("GET /api/users", authHandler(s.handleUserList()))
 	s.mux.Handle("POST /api/users", s.handleUserCreate())
+
 	s.mux.Handle("POST /api/users/login", s.handleUserLogin())
+
 	s.mux.Handle("GET /api/users/{id}", authHandler(s.handleUserGet()))
+	s.mux.Handle("DELETE /api/users/{id}", authHandler(s.handleUserDelete()))
 
 	s.mux.Handle("GET /api/rooms", authHandler(s.handleRoomList()))
 	s.mux.Handle("POST /api/rooms", authHandler(s.handleRoomCreate()))
+
 	s.mux.Handle("GET /api/rooms/{id}", authHandler(s.handleRoomGet()))
 
 	s.mux.Handle("GET /api/rooms/{id}/messages", authHandler(s.handleMessageList()))

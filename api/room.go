@@ -8,38 +8,28 @@ import (
 	"github.com/worsediscord/server/services/room"
 )
 
-// swagger:model RoomCreateRequest
 type RoomCreateRequest struct {
 	Name string `json:"name"`
 }
 
-// swagger:response RoomResponse
 type RoomResponse struct {
 	Id   int64  `json:"id,omitempty"`
 	Name string `json:"name,omitempty"`
 }
 
-// swagger:response RoomsResponse
-type RoomsResponse []RoomResponse
-
-// swagger:route POST /rooms rooms createRoom
-// # Create a room
+// handleRoomCreate creates a room
 //
-//	Consumes:
-//	- application/json
-//	Produces:
-//	- application/json
-//	Parameters:
-//	+ name: room
-//	  in: body
-//	  description: room data
-//	  required: true
-//	  type: RoomCreateRequest
-//	Responses:
-//	  200:
-//	  400: Error
-//	  401: Error
-//	  500: Error
+//	@Summary	Create a room
+//	@Tags		rooms
+//	@Accept		json
+//	@Produce	json
+//	@Param		name	body	RoomCreateRequest	true	"room data"
+//	@Security	BasicAuth
+//	@Success	200
+//	@Failure	400
+//	@Failure	401
+//	@Failure	500
+//	@Router		/rooms [post]
 func (s *Server) handleRoomCreate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request RoomCreateRequest
@@ -66,17 +56,16 @@ func (s *Server) handleRoomCreate() http.HandlerFunc {
 	}
 }
 
-// swagger:route GET /rooms rooms listRooms
-// # Gets all rooms
+// handleRoomList lists rooms
 //
-//	Consumes:
-//	- application/json
-//	Produces:
-//	- application/json
-//	Responses:
-//	  200: RoomsResponse
-//	  401: Error
-//	  500: Error
+//	@Summary	Get all rooms
+//	@Tags		rooms
+//	@Accept		json
+//	@Produce	json
+//	@Success	200
+//	@Failure	401
+//	@Failure	500
+//	@Router		/rooms [get]
 func (s *Server) handleRoomList() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rooms, err := s.RoomService.List(r.Context())
@@ -85,7 +74,7 @@ func (s *Server) handleRoomList() http.HandlerFunc {
 			return
 		}
 
-		var response RoomsResponse
+		var response []RoomResponse
 		for i := range rooms {
 			response = append(response, RoomResponse{Id: rooms[i].Id, Name: rooms[i].Name})
 		}
@@ -101,22 +90,18 @@ func (s *Server) handleRoomList() http.HandlerFunc {
 	}
 }
 
-// swagger:route GET /rooms/{id} rooms getRoomById
-// # Gets a room
+// handleRoomGet gets a room
 //
-//	Produces:
-//	- application/json
-//	Parameters:
-//	+ name: id
-//	  in: path
-//	  description: id to fetch
-//	  required: true
-//	  type: string
-//	Responses:
-//	  200: RoomResponse
-//	  401: Error
-//	  404: Error
-//	  500: Error
+//	@Summary	Gets a room
+//	@Tags		rooms
+//	@Accept		json
+//	@Produce	json
+//	@Param		id	path	string	true	"id to fetch"
+//	@Success	200
+//	@Failure	401
+//	@Failure	404
+//	@Failure	500
+//	@Router		/rooms/{id} [get]
 func (s *Server) handleRoomGet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -135,6 +120,23 @@ func (s *Server) handleRoomGet() http.HandlerFunc {
 
 		if err = json.NewEncoder(w).Encode(RoomResponse{Id: gotRoom.Id, Name: gotRoom.Name}); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+}
+
+func (s *Server) handleRoomDelete() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		if err = s.RoomService.Delete(r.Context(), room.DeleteRoomOpts{int64(id)}); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
