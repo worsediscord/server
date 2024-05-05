@@ -211,11 +211,27 @@ func (s *Server) handleUserLogin() http.HandlerFunc {
 //	@Failure	500
 //	@Router		/users/{id} [delete]
 func (s *Server) handleUserDelete() http.HandlerFunc {
+	logger := slog.New(s.logHandler).With(slog.String("handle", "UserDelete"))
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := s.UserService.Delete(r.Context(), user.DeleteUserOpts{Id: r.PathValue("id")}); err != nil {
+		userId, ok := r.Context().Value("userID").(string)
+		if !ok {
+			logger.Error("failed to lookup apikey in request context")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if userId != r.PathValue("id") {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if err := s.UserService.Delete(r.Context(), user.DeleteUserOpts{Id: userId}); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
+		// TODO the user's token is pretty much still valid
 
 		return
 	}
