@@ -7,23 +7,29 @@ import (
 )
 
 type FakeUserService struct {
-	ExpectedUser  *user.User
-	ExpectedUsers []*user.User
-	ExpectedError error
+	ExpectedCreateError error
+
+	ExpectedGetUserByIdUser  *user.User
+	ExpectedGetUserByIdError error
+
+	ExpectedListUsers []*user.User
+	ExpectedListError error
+
+	ExpectedDeleteError error
 }
 
 func (f *FakeUserService) Create(_ context.Context, _ user.CreateUserOpts) error {
-	return f.ExpectedError
+	return f.ExpectedCreateError
 }
 
 func (f *FakeUserService) GetUserById(_ context.Context, _ user.GetUserByIdOpts) (*user.User, error) {
-	return f.ExpectedUser, f.ExpectedError
+	return f.ExpectedGetUserByIdUser, f.ExpectedGetUserByIdError
 }
 
 func (f *FakeUserService) List(_ context.Context) ([]*user.User, error) {
-	return f.ExpectedUsers, f.ExpectedError
+	return f.ExpectedListUsers, f.ExpectedListError
 }
 
 func (f *FakeUserService) Delete(_ context.Context, _ user.DeleteUserOpts) error {
-	return f.ExpectedError
+	return f.ExpectedDeleteError
 }

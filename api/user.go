@@ -68,6 +68,7 @@ func (s *Server) handleUserCreate() http.HandlerFunc {
 
 		opts := user.CreateUserOpts{Username: request.Username, Password: request.Password}
 		if err := s.UserService.Create(r.Context(), opts); err != nil {
+			logger.Error("failed to create user", slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -88,6 +89,8 @@ func (s *Server) handleUserCreate() http.HandlerFunc {
 //	@Failure	500
 //	@Router		/users [get]
 func (s *Server) handleUserList() http.HandlerFunc {
+	logger := slog.New(s.logHandler).With(slog.String("handle", "UserList"))
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		users, err := s.UserService.List(r.Context())
 		if err != nil {
@@ -102,6 +105,7 @@ func (s *Server) handleUserList() http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 
 		if err = json.NewEncoder(w).Encode(response); err != nil {
+			logger.Error("failed to encode response", slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}

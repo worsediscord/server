@@ -11,33 +11,82 @@ import (
 	"github.com/worsediscord/server/util"
 )
 
-func TestServer_HandleUserList(t *testing.T) {
-	svc := usertest.FakeUserService{
-		ExpectedUsers: []*user.User{
-			{Username: "spiderman", Nickname: "spidey", Password: "uncleben123"},
-		},
-		ExpectedError: nil,
-	}
-
-	s := NewServer(&svc, nil, nil, nil, util.NopLogHandler{})
+func TestServer_HandleUserCreate(t *testing.T) {
+	s := NewServer(nil, nil, nil, nil, util.NopLogHandler)
+	validRequest := UserCreateRequest{Username: "spiderman", Password: "password123"}
+	invalidRequest := UserCreateRequest{Username: "batman", Password: ""}
 
 	tests := map[string]struct {
-		request          *http.Request
-		recorder         *httptest.ResponseRecorder
-		expectedStatus   int
-		expectedResponse []UserResponse
+		request        *http.Request
+		recorder       *httptest.ResponseRecorder
+		userService    user.Service
+		expectedStatus int
 	}{
 		"valid": {
-			httptest.NewRequest(http.MethodGet, "/api/users", nil),
-			httptest.NewRecorder(),
-			200,
-			[]UserResponse{{Username: "spiderman", Nickname: "spidey"}},
+			request:        httptest.NewRequest(http.MethodPost, "/api/users", util.StructToReaderOrDie(validRequest)),
+			recorder:       httptest.NewRecorder(),
+			userService:    &usertest.FakeUserService{ExpectedCreateError: nil, ExpectedGetUserByIdError: user.ErrNotFound},
+			expectedStatus: http.StatusOK,
+		},
+		"invalid": {
+			request:        httptest.NewRequest(http.MethodPost, "/api/users", util.StructToReaderOrDie(invalidRequest)),
+			recorder:       httptest.NewRecorder(),
+			userService:    &usertest.FakeUserService{},
+			expectedStatus: http.StatusBadRequest,
+		},
+		"conflict": {
+			request:        httptest.NewRequest(http.MethodPost, "/api/users", util.StructToReaderOrDie(validRequest)),
+			recorder:       httptest.NewRecorder(),
+			userService:    &usertest.FakeUserService{ExpectedGetUserByIdUser: &user.User{Username: "spiderman"}},
+			expectedStatus: http.StatusConflict,
 		},
 	}
 
 	for name, input := range tests {
 		t.Run(name, func(t *testing.T) {
+			s.UserService = input.userService
+			s.handleUserCreate()(input.recorder, input.request)
+
+			if input.recorder.Code != input.expectedStatus {
+				t.Fatalf("got status %d, expected %d", input.recorder.Code, input.expectedStatus)
+			}
+		})
+	}
+}
+
+func TestServer_HandleUserList(t *testing.T) {
+	s := NewServer(nil, nil, nil, nil, util.NopLogHandler)
+	emptyResponse := []*user.User{}
+	nonEmptyResponse := []*user.User{{Username: "spiderman", Nickname: "spidey", Password: "uncleben123"}}
+
+	tests := map[string]struct {
+		request          *http.Request
+		recorder         *httptest.ResponseRecorder
+		userService      user.Service
+		expectedStatus   int
+		expectedResponse []UserResponse
+	}{
+		"valid": {
+			request:          httptest.NewRequest(http.MethodGet, "/api/users", nil),
+			recorder:         httptest.NewRecorder(),
+			userService:      &usertest.FakeUserService{ExpectedListUsers: nonEmptyResponse},
+			expectedStatus:   http.StatusOK,
+			expectedResponse: []UserResponse{{Username: "spiderman", Nickname: "spidey"}},
+		},
+		"empty": {
+			request:          httptest.NewRequest(http.MethodGet, "/api/users", nil),
+			recorder:         httptest.NewRecorder(),
+			userService:      &usertest.FakeUserService{ExpectedListUsers: emptyResponse},
+			expectedStatus:   http.StatusOK,
+			expectedResponse: []UserResponse{},
+		},
+	}
+
+	for name, input := range tests {
+		t.Run(name, func(t *testing.T) {
+			s.UserService = input.userService
 			s.handleUserList()(input.recorder, input.request)
+
 			if input.recorder.Code != input.expectedStatus {
 				t.Fatalf("got status %d, expected %d", input.recorder.Code, input.expectedStatus)
 			}
@@ -57,4 +106,16 @@ func TestServer_HandleUserList(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServer_HandleUserGet(t *testing.T) {
+
+}
+
+func TestServer_HandleUserLogin(t *testing.T) {
+
+}
+
+func TestServer_HandleUserDelete(t *testing.T) {
+
 }

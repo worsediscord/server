@@ -159,3 +159,35 @@ func TestMap_Delete(t *testing.T) {
 		})
 	}
 }
+
+func TestMap_Join(t *testing.T) {
+	m := NewMap()
+
+	if err := m.Create(nil, room.CreateRoomOpts{Name: "the big apple", UserId: "spiderman"}); err != nil {
+		t.Fatalf("failed to prepopulate map: %v", err)
+	}
+
+	tests := map[string]struct {
+		opts        room.JoinRoomOpts
+		expectedErr error
+	}{
+		"valid": {
+			opts:        room.JoinRoomOpts{Id: 100000000000, UserId: "batman"},
+			expectedErr: nil,
+		},
+		"not found": {
+			opts:        room.JoinRoomOpts{Id: 1, UserId: "batman"},
+			expectedErr: room.ErrNotFound,
+		},
+	}
+
+	for name, input := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := m.Join(nil, input.opts)
+
+			if !errors.Is(err, input.expectedErr) {
+				t.Fatalf("got error %q, expected %q", err, input.expectedErr)
+			}
+		})
+	}
+}
