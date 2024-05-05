@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -32,6 +34,8 @@ type RoomResponse struct {
 //	@Failure	500
 //	@Router		/rooms [post]
 func (s *Server) handleRoomCreate() http.HandlerFunc {
+	logger := slog.New(s.logHandler).With(slog.String("handle", "RoomCreate"))
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request RoomCreateRequest
 
@@ -45,7 +49,14 @@ func (s *Server) handleRoomCreate() http.HandlerFunc {
 			return
 		}
 
-		opts := room.CreateRoomOpts{Name: request.Name}
+		userId, ok := r.Context().Value("userID").(string)
+		if !ok {
+			logger.Error("failed to lookup apikey in request context")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		opts := room.CreateRoomOpts{Name: request.Name, UserId: userId}
 		if err := s.RoomService.Create(r.Context(), opts); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -106,6 +117,8 @@ func (s *Server) handleRoomList() http.HandlerFunc {
 //	@Failure	500
 //	@Router		/rooms/{id} [get]
 func (s *Server) handleRoomGet() http.HandlerFunc {
+	logger := slog.New(s.logHandler).With(slog.String("handle", "RoomGet"))
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
@@ -122,6 +135,7 @@ func (s *Server) handleRoomGet() http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 
 		if err = json.NewEncoder(w).Encode(RoomResponse{Id: gotRoom.Id, Name: gotRoom.Name}); err != nil {
+			logger.Error("failed to encode json response", slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -144,6 +158,8 @@ func (s *Server) handleRoomGet() http.HandlerFunc {
 //	@Failure	500
 //	@Router		/rooms/{id} [delete]
 func (s *Server) handleRoomDelete() http.HandlerFunc {
+	logger := slog.New(s.logHandler).With(slog.String("handle", "RoomDelete"))
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
@@ -151,8 +167,24 @@ func (s *Server) handleRoomDelete() http.HandlerFunc {
 			return
 		}
 
-		if err = s.RoomService.Delete(r.Context(), room.DeleteRoomOpts{Id: int64(id)}); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
+		userId, ok := r.Context().Value("userID").(string)
+		if !ok {
+			logger.Error("failed to lookup apikey in request context")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if err = s.RoomService.Delete(r.Context(), room.DeleteRoomOpts{Id: int64(id), UserId: userId}); err != nil {
+			switch {
+			case errors.Is(err, room.ErrUnauthorized):
+				w.WriteHeader(http.StatusUnauthorized)
+			case errors.Is(err, room.ErrNotFound):
+				w.WriteHeader(http.StatusNotFound)
+			default:
+				logger.Error("failed to delete room", slog.String("error", err.Error()))
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+
 			return
 		}
 
