@@ -7,4 +7,6 @@ type Service interface {
 	GetRoomById(context.Context, GetRoomByIdOpts) (*Room, error)
 	List(context.Context) ([]*Room, error)
 	Delete(context.Context, DeleteRoomOpts) error
+
+	Join(context.Context, JoinRoomOpts) error
 }

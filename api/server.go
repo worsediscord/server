@@ -74,6 +74,7 @@ func NewServer(
 	s.mux.Handle("POST /api/rooms", authHandler(s.handleRoomCreate()))
 
 	s.mux.Handle("GET /api/rooms/{id}", authHandler(s.handleRoomGet()))
+	s.mux.Handle("DELETE /api/rooms/{id}", authHandler(s.handleRoomDelete()))
 
 	s.mux.Handle("GET /api/rooms/{id}/messages", authHandler(s.handleMessageList()))
 	s.mux.Handle("POST /api/rooms/{id}/messages", authHandler(s.handleMessageCreate()))

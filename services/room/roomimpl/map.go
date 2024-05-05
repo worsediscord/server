@@ -2,6 +2,7 @@ package roomimpl
 
 import (
 	"context"
+	"slices"
 
 	"github.com/eolso/threadsafe"
 	"github.com/worsediscord/server/services/room"
@@ -24,7 +25,7 @@ func NewMap() *Map {
 func (m *Map) Create(_ context.Context, opts room.CreateRoomOpts) error {
 	id := m.padding + m.roomCounter
 
-	m.data.Set(id, &room.Room{Name: opts.Name, Id: id})
+	m.data.Set(id, &room.Room{Name: opts.Name, Id: id, Users: []string{opts.UserId}, Admins: []string{opts.UserId}})
 
 	m.roomCounter += 1
 
@@ -45,6 +46,32 @@ func (m *Map) List(_ context.Context) ([]*room.Room, error) {
 }
 
 func (m *Map) Delete(_ context.Context, opts room.DeleteRoomOpts) error {
+	r, ok := m.data.Get(opts.Id)
+	if !ok {
+		return room.ErrNotFound
+	}
+
+	if !opts.Force && !slices.Contains(r.Admins, opts.UserId) {
+		return room.ErrUnauthorized
+	}
+
 	m.data.Delete(opts.Id)
+	return nil
+}
+
+func (m *Map) Join(_ context.Context, opts room.JoinRoomOpts) error {
+	r, ok := m.data.Get(opts.Id)
+	if !ok {
+		return room.ErrNotFound
+	}
+
+	if slices.Contains(r.Users, opts.UserId) {
+		return nil
+	}
+
+	// This is still pretty vulnerable to race conditions
+	r.Users = append(r.Users, opts.UserId)
+	m.data.Set(r.Id, r)
+
 	return nil
 }

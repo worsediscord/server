@@ -1,7 +1,8 @@
 package room
 
 type CreateRoomOpts struct {
-	Name string
+	Name   string
+	UserId string
 }
 
 type GetRoomByIdOpts struct {
@@ -9,5 +10,12 @@ type GetRoomByIdOpts struct {
 }
 
 type DeleteRoomOpts struct {
-	Id int64
+	Id     int64
+	UserId string
+	Force  bool
+}
+
+type JoinRoomOpts struct {
+	Id     int64
+	UserId string
 }
