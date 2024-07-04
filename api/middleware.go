@@ -17,6 +17,7 @@ type writeWrapper struct {
 	statusCode   int
 	bytesWritten int
 	w            http.ResponseWriter
+	wroteHeader  bool
 }
 
 // RequestLoggerMiddleware logs incoming requests and the status of the response.
@@ -37,7 +38,7 @@ func RequestLoggerMiddleware(logHandler slog.Handler, level slog.Level) func(nex
 				logger.Log(context.Background(), level,
 					fmt.Sprintf("%s %s %s", r.Method, r.URL.Path, r.Proto),
 					slog.String("remote_address", remoteAddr),
-					slog.Int("status_code", ww.statusCode),
+					slog.Int("status_code", ww.Status()),
 					slog.Int("bytes_written", ww.bytesWritten),
 					slog.String("duration", time.Since(startTime).Round(time.Nanosecond).String()),
 				)
@@ -79,7 +80,7 @@ func (w *writeWrapper) Header() http.Header {
 func (w *writeWrapper) Write(bytes []byte) (int, error) {
 	var err error
 
-	if w.statusCode == 0 {
+	if !w.wroteHeader {
 		w.statusCode = http.StatusOK
 	}
 
@@ -91,4 +92,13 @@ func (w *writeWrapper) Write(bytes []byte) (int, error) {
 func (w *writeWrapper) WriteHeader(statusCode int) {
 	w.statusCode = statusCode
 	w.w.WriteHeader(statusCode)
+	w.wroteHeader = true
+}
+
+func (w *writeWrapper) Status() int {
+	if !w.wroteHeader {
+		return http.StatusOK
+	}
+
+	return w.statusCode
 }
