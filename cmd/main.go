@@ -27,9 +27,9 @@ func main() {
 		MaxAge:           300,
 	})
 
-	h := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
+	h := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
 
-	s := api.NewServer(userService, roomService, messageService, authService, h, api.RequestLoggerMiddleware(h), corsHandler)
+	s := api.NewServer(userService, roomService, messageService, authService, h, api.RequestLoggerMiddleware(h, slog.LevelDebug), corsHandler)
 
 	cmd := NewRootCmd(NewStartCmd(s))
 
