@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/worsediscord/server/cmd"
 	"os"
 
 	"github.com/worsediscord/server/api"
@@ -10,31 +11,33 @@ import (
 
 type RootCmd struct {
 	server      *api.Server
-	subcommands []Command
+	subcommands []cmd.Command
 
 	verbose bool
 }
 
-func NewRootCmd(subcommands ...Command) *RootCmd {
-
+func NewRootCmd(subcommands ...cmd.Command) *RootCmd {
 	rootCmd := &RootCmd{
 		subcommands: subcommands,
 	}
 
-	helpString := fmt.Sprintf("%s\n\nUsage:\n  %s [options] [command]\n", rootCmd.Description(), rootCmd.Name())
-	if len(rootCmd.subcommands) > 0 {
-		helpString += "\nAvailable Commands:\n"
-
-		for _, cmd := range rootCmd.subcommands {
-			helpString += fmt.Sprintf("  %s    \t%s\n", cmd.Name(), cmd.Description())
-		}
-	}
-	helpString += fmt.Sprintf("\nOptions:\n")
-
+	//helpString := fmt.Sprintf("%s\n\nUsage:\n  %s [options] [command]\n", rootCmd.Description(), rootCmd.Name())
+	//if len(rootCmd.subcommands) > 0 {
+	//	helpString += "\nAvailable Commands:\n"
+	//
+	//	for _, cmd := range rootCmd.subcommands {
+	//		helpString += fmt.Sprintf("  %s    \t%s\n", cmd.Name(), cmd.Description())
+	//	}
+	//}
+	//helpString += fmt.Sprintf("\nOptions:\n")
 	flag.Usage = func() {
-		fmt.Fprint(flag.CommandLine.Output(), helpString)
-		flag.PrintDefaults()
+		_, _ = fmt.Fprint(flag.CommandLine.Output(), cmd.HelpString(rootCmd, nil, rootCmd.subcommands...))
 	}
+
+	//flag.Usage = func() {
+	//	fmt.Fprint(flag.CommandLine.Output(), cmd.HelpString())
+	//	flag.PrintDefaults()
+	//}
 
 	return rootCmd
 }
