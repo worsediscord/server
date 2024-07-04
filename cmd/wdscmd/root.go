@@ -65,13 +65,13 @@ func (r *RootCmd) Parse([]string) error {
 }
 
 func (r *RootCmd) Run() error {
-	for _, cmd := range r.subcommands {
-		if flag.Arg(0) == cmd.Name() {
-			if err := cmd.Parse(flag.Args()[1:]); err != nil {
+	for _, subcommand := range r.subcommands {
+		if flag.Arg(0) == subcommand.Name() {
+			if err := subcommand.Parse(flag.Args()[1:]); err != nil {
 				return err
 			}
 
-			if err := cmd.Run(); err != nil {
+			if err := subcommand.Run(); err != nil {
 				return err
 			}
 		}

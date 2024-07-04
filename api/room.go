@@ -57,14 +57,14 @@ func (s *Server) handleRoomCreate() http.HandlerFunc {
 		}
 
 		opts := room.CreateRoomOpts{Name: request.Name, UserId: userId}
-		room, err := s.RoomService.Create(r.Context(), opts)
+		createdRoom, err := s.RoomService.Create(r.Context(), opts)
 		if err != nil {
 			logger.Error("failed to create room", slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		response := RoomResponse{Id: room.Id, Name: room.Name}
+		response := RoomResponse{Id: createdRoom.Id, Name: createdRoom.Name}
 		if err = json.NewEncoder(w).Encode(response); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
