@@ -27,7 +27,11 @@ func HelpString(command Command, fs *flag.FlagSet, subcommands ...Command) strin
 	var helpString strings.Builder
 	w := tabwriter.NewWriter(&helpString, 0, 0, 2, ' ', 0)
 
-	_, _ = fmt.Fprintf(w, "%s\n\nUsage:\n%s%s [options]", command.Description(), padding, command.Name())
+	_, _ = fmt.Fprintf(w, "%s\n\nUsage:\n%s%s", command.Description(), padding, command.Name())
+
+	if fs != nil && countFlags(fs) > 0 {
+		_, _ = fmt.Fprintf(w, " [options]")
+	}
 
 	if len(subcommands) > 0 {
 		_, _ = fmt.Fprintf(w, " [command]\n\nAvailable Commands\n")
@@ -121,4 +125,14 @@ func getShortFlag(longFlagUsage string) string {
 	}
 
 	return split[1]
+}
+
+// countFlag counts all flags in a flag set, even those not set.
+func countFlags(fs *flag.FlagSet) int {
+	count := 0
+	fs.VisitAll(func(f *flag.Flag) {
+		count++
+	})
+
+	return count
 }
