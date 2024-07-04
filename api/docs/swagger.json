@@ -76,7 +76,10 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK"
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/api.RoomResponse"
+                        }
                     },
                     "400": {
                         "description": "Bad Request"
@@ -349,9 +352,6 @@
                         "BasicAuth": []
                     }
                 ],
-                "consumes": [
-                    "application/json"
-                ],
                 "produces": [
                     "application/json"
                 ],
@@ -365,6 +365,9 @@
                         "schema": {
                             "$ref": "#/definitions/api.UserLoginResponse"
                         }
+                    },
+                    "400": {
+                        "description": "Bad Request"
                     },
                     "401": {
                         "description": "Unauthorized"
@@ -466,6 +469,7 @@
             "type": "object",
             "properties": {
                 "content": {
+                    "description": "The content of the message.",
                     "type": "string"
                 }
             }
@@ -474,12 +478,15 @@
             "type": "object",
             "properties": {
                 "content": {
+                    "description": "The content of the message.",
                     "type": "string"
                 },
                 "timestamp": {
+                    "description": "Time since epoch in milliseconds.",
                     "type": "integer"
                 },
                 "user_id": {
+                    "description": "The unique username of the message author.",
                     "type": "string"
                 }
             }
@@ -487,6 +494,18 @@
         "api.RoomCreateRequest": {
             "type": "object",
             "properties": {
+                "name": {
+                    "description": "The name of the room to create. This does not need to be globally unique.",
+                    "type": "string"
+                }
+            }
+        },
+        "api.RoomResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
                 "name": {
                     "type": "string"
                 }
@@ -496,9 +515,11 @@
             "type": "object",
             "properties": {
                 "password": {
+                    "description": "The password to set. Must be at least 8 characters long.",
                     "type": "string"
                 },
                 "username": {
+                    "description": "The globally unique username of the user.",
                     "type": "string"
                 }
             }
@@ -515,11 +536,11 @@
             "type": "object",
             "properties": {
                 "nickname": {
-                    "description": "The nickname of the user",
+                    "description": "The nickname of the user.",
                     "type": "string"
                 },
                 "username": {
-                    "description": "The globally unique username of the user",
+                    "description": "The globally unique username of the user.",
                     "type": "string"
                 }
             }

@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/worsediscord/server/services/auth"
+	"github.com/worsediscord/server/services/auth/authtest"
 	"github.com/worsediscord/server/services/user"
 	"github.com/worsediscord/server/services/user/usertest"
 	"github.com/worsediscord/server/util"
@@ -56,8 +58,8 @@ func TestServer_HandleUserCreate(t *testing.T) {
 
 func TestServer_HandleUserList(t *testing.T) {
 	s := NewServer(nil, nil, nil, nil, util.NopLogHandler)
+	validResponse := []*user.User{{Username: "spiderman", Nickname: "spidey", Password: "uncleben123"}}
 	emptyResponse := []*user.User{}
-	nonEmptyResponse := []*user.User{{Username: "spiderman", Nickname: "spidey", Password: "uncleben123"}}
 
 	tests := map[string]struct {
 		request          *http.Request
@@ -69,7 +71,7 @@ func TestServer_HandleUserList(t *testing.T) {
 		"valid": {
 			request:          httptest.NewRequest(http.MethodGet, "/api/users", nil),
 			recorder:         httptest.NewRecorder(),
-			userService:      &usertest.FakeUserService{ExpectedListUsers: nonEmptyResponse},
+			userService:      &usertest.FakeUserService{ExpectedListUsers: validResponse},
 			expectedStatus:   http.StatusOK,
 			expectedResponse: []UserResponse{{Username: "spiderman", Nickname: "spidey"}},
 		},
@@ -109,11 +111,106 @@ func TestServer_HandleUserList(t *testing.T) {
 }
 
 func TestServer_HandleUserGet(t *testing.T) {
+	s := NewServer(nil, nil, nil, nil, util.NopLogHandler)
+	validResponse := &user.User{Username: "spiderman", Nickname: "spidey", Password: "uncleben123"}
+	emptyResponse := &user.User{}
 
+	tests := map[string]struct {
+		request          *http.Request
+		recorder         *httptest.ResponseRecorder
+		userService      user.Service
+		expectedStatus   int
+		expectedResponse UserResponse
+	}{
+		"valid": {
+			request:          httptest.NewRequest(http.MethodGet, "/api/users/spiderman", nil),
+			recorder:         httptest.NewRecorder(),
+			userService:      &usertest.FakeUserService{ExpectedGetUserByIdUser: validResponse},
+			expectedStatus:   http.StatusOK,
+			expectedResponse: UserResponse{Username: "spiderman", Nickname: "spidey"},
+		},
+		"empty": {
+			request:          httptest.NewRequest(http.MethodGet, "/api/users/batman", nil),
+			recorder:         httptest.NewRecorder(),
+			userService:      &usertest.FakeUserService{ExpectedGetUserByIdUser: emptyResponse, ExpectedGetUserByIdError: user.ErrNotFound},
+			expectedStatus:   http.StatusNotFound,
+			expectedResponse: UserResponse{},
+		},
+	}
+
+	for name, input := range tests {
+		t.Run(name, func(t *testing.T) {
+			s.UserService = input.userService
+			s.handleUserGet()(input.recorder, input.request)
+
+			if input.recorder.Code != input.expectedStatus {
+				t.Fatalf("got status %d, expected %d", input.recorder.Code, input.expectedStatus)
+			}
+
+			var response UserResponse
+			// 404 returns an empty body, should probably do something better somewhere
+			json.NewDecoder(input.recorder.Body).Decode(&response)
+
+			if response.Nickname != input.expectedResponse.Nickname || response.Username != input.expectedResponse.Username {
+				t.Fatalf("got user %v, expected %v", response, input.expectedResponse)
+			}
+		})
+	}
 }
 
 func TestServer_HandleUserLogin(t *testing.T) {
+	s := NewServer(nil, nil, nil, nil, util.NopLogHandler)
 
+	validRequest := httptest.NewRequest(http.MethodGet, "/api/users/login", nil)
+	validRequest.SetBasicAuth("spiderman", "uncleben123")
+	validResponse := &user.User{Username: "spiderman", Nickname: "spidey", Password: "uncleben123"}
+
+	invalidRequest := httptest.NewRequest(http.MethodGet, "/api/users/login", nil)
+	invalidRequest.SetBasicAuth("batman", "iamthenight")
+
+	tests := map[string]struct {
+		request          *http.Request
+		recorder         *httptest.ResponseRecorder
+		userService      user.Service
+		authService      auth.Service
+		expectedStatus   int
+		expectedResponse UserResponse
+	}{
+		"valid": {
+			request:          httptest.NewRequest(http.MethodGet, "/api/users/login", nil),
+			recorder:         httptest.NewRecorder(),
+			userService:      &usertest.FakeUserService{ExpectedGetUserByIdUser: validResponse},
+			authService:      &authtest.FakeAuthService{},
+			expectedStatus:   http.StatusOK,
+			expectedResponse: UserResponse{Username: "spiderman", Nickname: "spidey"},
+		},
+		"empty": {
+			request:        httptest.NewRequest(http.MethodGet, "/api/users/login", nil),
+			recorder:       httptest.NewRecorder(),
+			userService:    &usertest.FakeUserService{ExpectedGetUserByIdUser: &user.User{}, ExpectedGetUserByIdError: user.ErrNotFound},
+			authService:    &authtest.FakeAuthService{},
+			expectedStatus: http.StatusNotFound,
+		},
+	}
+
+	for name, input := range tests {
+		t.Run(name, func(t *testing.T) {
+			s.UserService = input.userService
+			s.handleUserGet()(input.recorder, input.request)
+
+			if input.recorder.Code != input.expectedStatus {
+				t.Fatalf("got status %d, expected %d", input.recorder.Code, input.expectedStatus)
+			}
+
+			var response UserResponse
+			// 404 returns an empty body, should probably do something better somewhere
+			json.NewDecoder(input.recorder.Body).Decode(&response)
+
+			if response.Nickname != input.expectedResponse.Nickname || response.Username != input.expectedResponse.Username {
+				t.Fatalf("got user %v, expected %v", response, input.expectedResponse)
+			}
+		})
+	}
 }
 
 func TestServer_HandleUserDelete(t *testing.T) {
