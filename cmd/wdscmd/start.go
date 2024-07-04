@@ -50,7 +50,7 @@ func (s *StartCmd) Parse(args []string) error {
 	fs.StringVar(&s.Port, "port", s.Port, cmd.LongFlagUsage("p"))
 
 	fs.StringVar(&s.LogLevel, "log-level", s.LogLevel, "log level")
-	fs.StringVar(&s.LogFormat, "log-format", s.LogFormat, "log format (text | json)")
+	fs.StringVar(&s.LogFormat, "log-format", s.LogFormat, "log format (text | json | disabled)")
 	fs.BoolVar(&s.LogRequests, "log-requests", s.LogRequests, "Enable logging of requests")
 
 	fs.Usage = func() {
@@ -82,6 +82,8 @@ func (s *StartCmd) Run() error {
 	switch strings.ToLower(s.LogFormat) {
 	case "json":
 		logHandler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: util.StringToLogLevel(s.LogLevel)})
+	case "disabled":
+		logHandler = util.NopLogHandler
 	default:
 		logHandler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: util.StringToLogLevel(s.LogLevel)})
 	}
