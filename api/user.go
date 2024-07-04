@@ -158,10 +158,10 @@ func (s *Server) handleUserGet() http.HandlerFunc {
 //
 //	@Summary	Logs in a user
 //	@Tags		users
-//	@Accept		json
 //	@Produce	json
 //	@Security	BasicAuth
 //	@Success	200	{object}	UserLoginResponse
+//	@Failure 400
 //	@Failure	401
 //	@Failure	500
 //	@Router		/users/login [post]
