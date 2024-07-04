@@ -28,7 +28,7 @@ type RoomResponse struct {
 //	@Produce	json
 //	@Param		name	body	RoomCreateRequest	true	"room data"
 //	@Security	ApiKey
-//	@Success	200
+//	@Success	200 {object} RoomResponse
 //	@Failure	400
 //	@Failure	401
 //	@Failure	500
@@ -57,12 +57,18 @@ func (s *Server) handleRoomCreate() http.HandlerFunc {
 		}
 
 		opts := room.CreateRoomOpts{Name: request.Name, UserId: userId}
-		if err := s.RoomService.Create(r.Context(), opts); err != nil {
+		room, err := s.RoomService.Create(r.Context(), opts)
+		if err != nil {
+			logger.Error("failed to create room", slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		// TODO return id probably
+		response := RoomResponse{Id: room.Id, Name: room.Name}
+		if err = json.NewEncoder(w).Encode(response); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 		return
 	}

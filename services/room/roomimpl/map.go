@@ -22,14 +22,14 @@ func NewMap() *Map {
 	}
 }
 
-func (m *Map) Create(_ context.Context, opts room.CreateRoomOpts) error {
+func (m *Map) Create(_ context.Context, opts room.CreateRoomOpts) (*room.Room, error) {
 	id := m.padding + m.roomCounter
+	r := &room.Room{Name: opts.Name, Id: id, Users: []string{opts.UserId}, Admins: []string{opts.UserId}}
 
-	m.data.Set(id, &room.Room{Name: opts.Name, Id: id, Users: []string{opts.UserId}, Admins: []string{opts.UserId}})
-
+	m.data.Set(id, r)
 	m.roomCounter += 1
 
-	return nil
+	return r, nil
 }
 
 func (m *Map) GetRoomById(_ context.Context, opts room.GetRoomByIdOpts) (*room.Room, error) {

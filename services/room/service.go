@@ -3,7 +3,7 @@ package room
 import "context"
 
 type Service interface {
-	Create(context.Context, CreateRoomOpts) error
+	Create(context.Context, CreateRoomOpts) (*Room, error)
 	GetRoomById(context.Context, GetRoomByIdOpts) (*Room, error)
 	List(context.Context) ([]*Room, error)
 	Delete(context.Context, DeleteRoomOpts) error
