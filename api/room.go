@@ -93,7 +93,7 @@ func (s *Server) handleRoomList() http.HandlerFunc {
 			return
 		}
 
-		var response []RoomResponse
+		response := make([]RoomResponse, 0)
 		for i := range rooms {
 			response = append(response, RoomResponse{Id: rooms[i].Id, Name: rooms[i].Name})
 		}

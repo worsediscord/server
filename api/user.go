@@ -97,7 +97,7 @@ func (s *Server) handleUserList() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 
-		var response []UserResponse
+		response := make([]UserResponse, 0)
 		for i := range users {
 			response = append(response, UserResponse{Username: users[i].Username, Nickname: users[i].Nickname})
 		}

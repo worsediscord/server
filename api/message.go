@@ -120,7 +120,7 @@ func (s *Server) handleMessageList() http.HandlerFunc {
 		}
 
 		//var response ListMessageResponse
-		var response []MessageResponse
+		response := make([]MessageResponse, 0)
 		for _, msg := range allMessages {
 			if msg.RoomId == int64(roomId) {
 				response = append(response, MessageResponse{
