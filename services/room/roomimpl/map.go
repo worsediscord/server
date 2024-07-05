@@ -8,6 +8,8 @@ import (
 	"github.com/worsediscord/server/services/room"
 )
 
+const padding = 100000000000
+
 type Map struct {
 	data        *threadsafe.Map[int64, *room.Room]
 	padding     int64
@@ -17,7 +19,7 @@ type Map struct {
 func NewMap() *Map {
 	return &Map{
 		data:        threadsafe.NewMap[int64, *room.Room](),
-		padding:     100000000000,
+		padding:     padding,
 		roomCounter: 0,
 	}
 }

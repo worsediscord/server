@@ -18,19 +18,26 @@ func TestMap_Create(t *testing.T) {
 	m := NewMap()
 
 	tests := map[string]struct {
-		opts        room.CreateRoomOpts
-		expectedErr error
+		opts         room.CreateRoomOpts
+		expectedRoom *room.Room
+		expectedErr  error
 	}{
 		"valid": {
-			opts:        room.CreateRoomOpts{Name: "the big apple"},
-			expectedErr: nil,
+			opts:         room.CreateRoomOpts{Name: "the big apple", UserId: "spidey"},
+			expectedRoom: &room.Room{Id: padding, Name: "the big apple", Users: []string{"spidey"}, Admins: []string{"spidey"}},
+			expectedErr:  nil,
 		},
 	}
 
 	for name, input := range tests {
 		t.Run(name, func(t *testing.T) {
-			if err := m.Create(nil, input.opts); !errors.Is(err, input.expectedErr) {
+			createdRoom, err := m.Create(nil, input.opts)
+			if !errors.Is(err, input.expectedErr) {
 				t.Fatalf("got error %q, expected %q", err, input.expectedErr)
+			}
+
+			if !reflect.DeepEqual(createdRoom, input.expectedRoom) {
+				t.Fatalf("got %v, expected %v", createdRoom, input.expectedRoom)
 			}
 		})
 	}
@@ -39,7 +46,8 @@ func TestMap_Create(t *testing.T) {
 func TestMap_GetRoomById(t *testing.T) {
 	m := NewMap()
 
-	if err := m.Create(nil, room.CreateRoomOpts{Name: "the big apple", UserId: "spiderman"}); err != nil {
+	createdRoom, err := m.Create(nil, room.CreateRoomOpts{Name: "the big apple", UserId: "spiderman"})
+	if err != nil {
 		t.Fatalf("failed to prepopulate map: %v", err)
 	}
 
@@ -49,7 +57,7 @@ func TestMap_GetRoomById(t *testing.T) {
 		expectedErr  error
 	}{
 		"valid": {
-			opts:         room.GetRoomByIdOpts{Id: 100000000000},
+			opts:         room.GetRoomByIdOpts{Id: createdRoom.Id},
 			expectedRoom: &room.Room{Id: 100000000000, Name: "the big apple", Users: []string{"spiderman"}, Admins: []string{"spiderman"}},
 			expectedErr:  nil,
 		},
@@ -79,7 +87,8 @@ func TestMap_List(t *testing.T) {
 	nonEmptyMap := NewMap()
 	emptyMap := NewMap()
 
-	if err := nonEmptyMap.Create(nil, room.CreateRoomOpts{Name: "the big apple", UserId: "spiderman"}); err != nil {
+	createdRoom, err := nonEmptyMap.Create(nil, room.CreateRoomOpts{Name: "the big apple", UserId: "spiderman"})
+	if err != nil {
 		t.Fatalf("failed to prepopulate map: %v", err)
 	}
 
@@ -90,7 +99,7 @@ func TestMap_List(t *testing.T) {
 	}{
 		"non-empty": {
 			m:             nonEmptyMap,
-			expectedRooms: []*room.Room{{Id: 100000000000, Name: "the big apple", Users: []string{"spiderman"}, Admins: []string{"spiderman"}}},
+			expectedRooms: []*room.Room{{Id: createdRoom.Id, Name: "the big apple", Users: []string{"spiderman"}, Admins: []string{"spiderman"}}},
 			expectedErr:   nil,
 		},
 		"empty": {
@@ -119,11 +128,13 @@ func TestMap_List(t *testing.T) {
 func TestMap_Delete(t *testing.T) {
 	m := NewMap()
 
-	if err := m.Create(nil, room.CreateRoomOpts{Name: "the big apple", UserId: "spiderman"}); err != nil {
+	roomToDelete, err := m.Create(nil, room.CreateRoomOpts{Name: "the big apple", UserId: "spiderman"})
+	if err != nil {
 		t.Fatalf("failed to prepopulate map: %v", err)
 	}
 
-	if err := m.Create(nil, room.CreateRoomOpts{Name: "the big apple (backup)", UserId: "spiderman"}); err != nil {
+	unauthorizedRoom, err := m.Create(nil, room.CreateRoomOpts{Name: "the big apple (backup)", UserId: "spiderman"})
+	if err != nil {
 		t.Fatalf("failed to prepopulate map: %v", err)
 	}
 
@@ -133,7 +144,7 @@ func TestMap_Delete(t *testing.T) {
 		expectedErr error
 	}{
 		"valid": {
-			roomId:      100000000000,
+			roomId:      roomToDelete.Id,
 			userId:      "spiderman",
 			expectedErr: nil,
 		},
@@ -142,7 +153,7 @@ func TestMap_Delete(t *testing.T) {
 			expectedErr: room.ErrNotFound,
 		},
 		"unauthorized": {
-			roomId:      100000000001,
+			roomId:      unauthorizedRoom.Id,
 			userId:      "batman",
 			expectedErr: room.ErrUnauthorized,
 		},
@@ -155,7 +166,6 @@ func TestMap_Delete(t *testing.T) {
 			if !errors.Is(err, input.expectedErr) {
 				t.Fatalf("got error %q, expected %q", err, input.expectedErr)
 			}
-
 		})
 	}
 }
@@ -163,7 +173,8 @@ func TestMap_Delete(t *testing.T) {
 func TestMap_Join(t *testing.T) {
 	m := NewMap()
 
-	if err := m.Create(nil, room.CreateRoomOpts{Name: "the big apple", UserId: "spiderman"}); err != nil {
+	createdRoom, err := m.Create(nil, room.CreateRoomOpts{Name: "the big apple", UserId: "spiderman"})
+	if err != nil {
 		t.Fatalf("failed to prepopulate map: %v", err)
 	}
 
@@ -172,7 +183,7 @@ func TestMap_Join(t *testing.T) {
 		expectedErr error
 	}{
 		"valid": {
-			opts:        room.JoinRoomOpts{Id: 100000000000, UserId: "batman"},
+			opts:        room.JoinRoomOpts{Id: createdRoom.Id, UserId: "batman"},
 			expectedErr: nil,
 		},
 		"not found": {
