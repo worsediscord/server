@@ -1,13 +1,17 @@
 package main
 
 func main() {
-	cmd := NewRootCmd(NewStartCmd())
+	rootCmd := NewRootCmd("wdscli")
 
-	if err := cmd.Parse(nil); err != nil {
+	rootCmd.AddSubcommands(
+		NewStartCmd("start", rootCmd.Name()+" "),
+	)
+
+	if err := rootCmd.Parse(nil); err != nil {
 		panic(err)
 	}
 
-	if err := cmd.Run(); err != nil {
+	if err := rootCmd.Run(); err != nil {
 		panic(err)
 	}
 }

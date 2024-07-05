@@ -24,19 +24,28 @@ type StartCmd struct {
 	LogLevel    string
 	LogFormat   string
 	LogRequests bool
+
+	name       string
+	helpPrefix string
 }
 
-func NewStartCmd() *StartCmd {
+func NewStartCmd(name string, helpPrefix string) *StartCmd {
+	if len(name) == 0 {
+		name = "start"
+	}
+
 	return &StartCmd{
 		Port:        "8069",
 		LogLevel:    "info",
 		LogFormat:   "text",
 		LogRequests: false,
+		name:        name,
+		helpPrefix:  helpPrefix,
 	}
 }
 
 func (s *StartCmd) Name() string {
-	return "start"
+	return s.name
 }
 
 func (s *StartCmd) Description() string {
@@ -54,7 +63,7 @@ func (s *StartCmd) Parse(args []string) error {
 	fs.BoolVar(&s.LogRequests, "log-requests", s.LogRequests, "Enable logging of requests")
 
 	fs.Usage = func() {
-		_, _ = fmt.Fprint(flag.CommandLine.Output(), cmd.HelpString(s, fs))
+		_, _ = fmt.Fprint(flag.CommandLine.Output(), cmd.HelpString(s.helpPrefix, s, fs))
 	}
 
 	return fs.Parse(args)

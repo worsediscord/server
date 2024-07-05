@@ -5,19 +5,25 @@ import (
 	"fmt"
 	"github.com/worsediscord/server/cmd"
 	"os"
-
-	"github.com/worsediscord/server/api"
+	"path/filepath"
 )
 
 type RootCmd struct {
-	server      *api.Server
+	name        string
 	subcommands []cmd.Command
-
-	verbose bool
 }
 
-func NewRootCmd(subcommands ...cmd.Command) *RootCmd {
+func NewRootCmd(name string, subcommands ...cmd.Command) *RootCmd {
+	if len(name) == 0 {
+		if len(os.Args) >= 1 {
+			name = filepath.Base(os.Args[0])
+		} else {
+			name = "root"
+		}
+	}
+
 	rootCmd := &RootCmd{
+		name:        name,
 		subcommands: subcommands,
 	}
 
@@ -25,12 +31,7 @@ func NewRootCmd(subcommands ...cmd.Command) *RootCmd {
 }
 
 func (r *RootCmd) Name() string {
-	var name string
-	if len(os.Args) >= 1 {
-		name = os.Args[0]
-	}
-
-	return name
+	return r.name
 }
 
 func (r *RootCmd) Description() string {
@@ -41,7 +42,7 @@ func (r *RootCmd) Description() string {
 // Parse parses the global flags of the program. The []string parameter is ignored.
 func (r *RootCmd) Parse([]string) error {
 	flag.Usage = func() {
-		_, _ = fmt.Fprint(flag.CommandLine.Output(), cmd.HelpString(r, flag.CommandLine, r.subcommands...))
+		_, _ = fmt.Fprint(flag.CommandLine.Output(), cmd.HelpString("", r, flag.CommandLine, r.subcommands...))
 	}
 
 	flag.Parse()
@@ -63,4 +64,8 @@ func (r *RootCmd) Run() error {
 	}
 
 	return nil
+}
+
+func (r *RootCmd) AddSubcommands(subcommands ...cmd.Command) {
+	r.subcommands = append(r.subcommands, subcommands...)
 }

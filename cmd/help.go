@@ -23,11 +23,11 @@ func LongFlagUsage(shortFlagName string) string {
 	return fmt.Sprintf("%s%s%s", helpLongFlagTag, helpFlagDelim, shortFlagName)
 }
 
-func HelpString(command Command, fs *flag.FlagSet, subcommands ...Command) string {
+func HelpString(commandPrefix string, command Command, fs *flag.FlagSet, subcommands ...Command) string {
 	var helpString strings.Builder
 	w := tabwriter.NewWriter(&helpString, 0, 0, 2, ' ', 0)
 
-	_, _ = fmt.Fprintf(w, "%s\n\nUsage:\n%s%s", command.Description(), padding, command.Name())
+	_, _ = fmt.Fprintf(w, "%s\n\nUsage:\n%s%s%s", command.Description(), padding, commandPrefix, command.Name())
 
 	if fs != nil && countFlags(fs) > 0 {
 		_, _ = fmt.Fprintf(w, " [options]")
