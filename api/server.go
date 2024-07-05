@@ -62,6 +62,8 @@ func NewServer(
 
 	authHandler := SessionAuthMiddleware(authService)
 
+	s.mux.Handle("GET /api/health", s.handleHealth())
+
 	s.mux.Handle("GET /api/users", authHandler(s.handleUserList()))
 	s.mux.Handle("POST /api/users", s.handleUserCreate())
 
