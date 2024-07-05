@@ -42,7 +42,7 @@ type MessageResponse struct {
 //	@Failure	500
 //	@Router		/rooms/{id}/messages [post]
 func (s *Server) handleMessageCreate() http.HandlerFunc {
-	logger := slog.New(s.logHandler).With(slog.String("handle", "MessageCreate"))
+	logger := slog.New(s.logHandler).With(slog.String("handler", "MessageCreate"))
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		roomId, err := strconv.Atoi(r.PathValue("id"))

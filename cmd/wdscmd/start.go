@@ -99,6 +99,10 @@ func (s *StartCmd) Run() error {
 
 	if s.LogRequests {
 		middleware = append(middleware, api.RequestLoggerMiddleware(logHandler, slog.LevelDebug))
+
+		if util.StringToLogLevel(s.LogLevel) > slog.LevelDebug {
+			fmt.Printf("WARNING: request logging enabled but log level is greater than debug (level: %s)\n", s.LogLevel)
+		}
 	}
 
 	server := api.NewServer(userService, roomService, messageService, authService, logHandler, middleware...)

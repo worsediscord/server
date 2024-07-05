@@ -34,7 +34,7 @@ type RoomResponse struct {
 //	@Failure	500
 //	@Router		/rooms [post]
 func (s *Server) handleRoomCreate() http.HandlerFunc {
-	logger := slog.New(s.logHandler).With(slog.String("handle", "RoomCreate"))
+	logger := slog.New(s.logHandler).With(slog.String("handler", "RoomCreate"))
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request RoomCreateRequest
@@ -69,6 +69,8 @@ func (s *Server) handleRoomCreate() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
+		logger.Info("room created", slog.String("name", createdRoom.Name))
 
 		return
 	}
@@ -123,7 +125,7 @@ func (s *Server) handleRoomList() http.HandlerFunc {
 //	@Failure	500
 //	@Router		/rooms/{id} [get]
 func (s *Server) handleRoomGet() http.HandlerFunc {
-	logger := slog.New(s.logHandler).With(slog.String("handle", "RoomGet"))
+	logger := slog.New(s.logHandler).With(slog.String("handler", "RoomGet"))
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -164,7 +166,7 @@ func (s *Server) handleRoomGet() http.HandlerFunc {
 //	@Failure	500
 //	@Router		/rooms/{id} [delete]
 func (s *Server) handleRoomDelete() http.HandlerFunc {
-	logger := slog.New(s.logHandler).With(slog.String("handle", "RoomDelete"))
+	logger := slog.New(s.logHandler).With(slog.String("handler", "RoomDelete"))
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -193,6 +195,8 @@ func (s *Server) handleRoomDelete() http.HandlerFunc {
 
 			return
 		}
+
+		logger.Info("room deleted", slog.Int("id", id))
 
 		return
 	}

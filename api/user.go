@@ -44,7 +44,7 @@ type UserLoginResponse struct {
 //	@Failure	500
 //	@Router		/users [post]
 func (s *Server) handleUserCreate() http.HandlerFunc {
-	logger := slog.New(s.logHandler).With(slog.String("handle", "UserCreate"))
+	logger := slog.New(s.logHandler).With(slog.String("handler", "UserCreate"))
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request UserCreateRequest
@@ -73,6 +73,8 @@ func (s *Server) handleUserCreate() http.HandlerFunc {
 			return
 		}
 
+		logger.Info("user created", slog.String("username", request.Username))
+
 		return
 	}
 }
@@ -89,7 +91,7 @@ func (s *Server) handleUserCreate() http.HandlerFunc {
 //	@Failure	500
 //	@Router		/users [get]
 func (s *Server) handleUserList() http.HandlerFunc {
-	logger := slog.New(s.logHandler).With(slog.String("handle", "UserList"))
+	logger := slog.New(s.logHandler).With(slog.String("handler", "UserList"))
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		users, err := s.UserService.List(r.Context())
@@ -166,6 +168,8 @@ func (s *Server) handleUserGet() http.HandlerFunc {
 //	@Failure	500
 //	@Router		/users/login [post]
 func (s *Server) handleUserLogin() http.HandlerFunc {
+	logger := slog.New(s.logHandler).With(slog.String("handler", "UserLogin"))
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		username, password, ok := r.BasicAuth()
 		if !ok {
@@ -186,6 +190,7 @@ func (s *Server) handleUserLogin() http.HandlerFunc {
 
 		key := auth.NewApiKey(24, time.Hour*1, storedUser.Username)
 		if err = s.AuthService.RegisterKey(key.Token(), key); err != nil {
+			logger.Error("failed to register key", slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -196,6 +201,8 @@ func (s *Server) handleUserLogin() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
+		logger.Info("user logged in", slog.String("username", username))
 
 		return
 	}
@@ -215,7 +222,7 @@ func (s *Server) handleUserLogin() http.HandlerFunc {
 //	@Failure	500
 //	@Router		/users/{id} [delete]
 func (s *Server) handleUserDelete() http.HandlerFunc {
-	logger := slog.New(s.logHandler).With(slog.String("handle", "UserDelete"))
+	logger := slog.New(s.logHandler).With(slog.String("handler", "UserDelete"))
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		userId, ok := r.Context().Value("userID").(string)
@@ -231,9 +238,13 @@ func (s *Server) handleUserDelete() http.HandlerFunc {
 		}
 
 		if err := s.UserService.Delete(r.Context(), user.DeleteUserOpts{Id: userId}); err != nil {
+			logger.Error("failed to delete user", slog.String("error", err.Error()))
+
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
+		logger.Info("user deleted", slog.String("username", userId))
 
 		// TODO the user's token is pretty much still valid
 
