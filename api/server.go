@@ -60,7 +60,7 @@ func NewServer(
 		middleware:     middleware,
 	}
 
-	authHandler := SessionAuthMiddleware(authService)
+	authHandler := SessionAuthMiddleware(logHandler, authService)
 
 	s.mux.Handle("GET /api/health", s.handleHealth())
 

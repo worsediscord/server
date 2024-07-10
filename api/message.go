@@ -45,17 +45,20 @@ func (s *Server) handleMessageCreate() http.HandlerFunc {
 	logger := slog.New(s.logHandler).With(slog.String("handler", "MessageCreate"))
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		roomId, err := strconv.Atoi(r.PathValue("id"))
+		var logAttrs []slog.Attr
+
+		roomId, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
 		// Verify the room exists
-		if _, err = s.RoomService.GetRoomById(r.Context(), room.GetRoomByIdOpts{Id: int64(roomId)}); err != nil {
+		if _, err = s.RoomService.GetRoomById(r.Context(), room.GetRoomByIdOpts{Id: roomId}); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		logAttrs = append(logAttrs, slog.Int64("room_id", roomId))
 
 		var request MessageCreateRequest
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -66,7 +69,7 @@ func (s *Server) handleMessageCreate() http.HandlerFunc {
 		// Verify the user exists
 		userId, ok := r.Context().Value("userID").(string)
 		if !ok {
-			logger.Error("failed to lookup apikey in request context")
+			logger.LogAttrs(r.Context(), slog.LevelError, "failed to lookup apikey in request context")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -75,6 +78,7 @@ func (s *Server) handleMessageCreate() http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		logAttrs = append(logAttrs, slog.String("user_id", userId))
 
 		opts := message.CreateMessageOpts{
 			UserId:  userId,
@@ -83,10 +87,12 @@ func (s *Server) handleMessageCreate() http.HandlerFunc {
 		}
 
 		if _, err = s.MessageService.Create(r.Context(), opts); err != nil {
-			logger.Error("failed to create message", slog.String("error", err.Error()))
+			logger.LogAttrs(r.Context(), slog.LevelError, "failed to create message", slog.String("error", err.Error()))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
+		logger.LogAttrs(r.Context(), slog.LevelInfo, "message created", logAttrs...)
 
 		return
 	}

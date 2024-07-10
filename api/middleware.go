@@ -22,7 +22,7 @@ type writeWrapper struct {
 
 // RequestLoggerMiddleware logs incoming requests and the status of the response.
 func RequestLoggerMiddleware(logHandler slog.Handler, level slog.Level) func(next http.Handler) http.Handler {
-	logger := slog.New(logHandler).With(slog.String("middleware", "RequestLoggerMiddleware"))
+	logger := slog.New(logHandler).With(slog.String("method", "RequestLoggerMiddleware"))
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +49,9 @@ func RequestLoggerMiddleware(logHandler slog.Handler, level slog.Level) func(nex
 	}
 }
 
-func SessionAuthMiddleware(authService auth.Service) func(next http.Handler) http.Handler {
+func SessionAuthMiddleware(logHandler slog.Handler, authService auth.Service) func(next http.Handler) http.Handler {
+	logger := slog.New(logHandler).With(slog.String("method", "SessionAuthMiddleware"))
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -62,6 +64,7 @@ func SessionAuthMiddleware(authService auth.Service) func(next http.Handler) htt
 
 			key, err := authService.RetrieveKey(token)
 			if err != nil || time.Now().After(key.ExpiresAt()) {
+				logger.Error("invalid token submitted", slog.String("path", r.URL.Path))
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
