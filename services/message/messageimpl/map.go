@@ -51,7 +51,7 @@ func (m *Map) List(_ context.Context, opts message.ListMessageOpts) ([]*message.
 	for _, msg := range m.data.Values() {
 		matchesFilter := true
 
-		if msg.RoomId != opts.RoomId {
+		if opts.RoomId != 0 && msg.RoomId != opts.RoomId {
 			matchesFilter = false
 		}
 		if len(opts.UserId) > 0 && msg.UserId != opts.UserId {

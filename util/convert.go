@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-// StructToReader takes any struct and calls json.Marshal on it before returning a io.Reader wrapped around the returned
+// StructToReader takes any struct and calls json.Marshal on it before returning an io.Reader wrapped around the returned
 // bytes.
 func StructToReader(v any) (io.Reader, error) {
 	b, err := json.Marshal(v)
@@ -17,7 +17,7 @@ func StructToReader(v any) (io.Reader, error) {
 	return bytes.NewReader(b), nil
 }
 
-// StructToReaderOrDie takes any struct and calls json.Marshal on it before returning a io.Reader wrapped around the returned
+// StructToReaderOrDie takes any struct and calls json.Marshal on it before returning an io.Reader wrapped around the returned
 // bytes. If the json.Marshal fails, this function panics.
 func StructToReaderOrDie(v any) io.Reader {
 	b, err := json.Marshal(v)

@@ -59,7 +59,7 @@ func TestServer_HandleUserCreate(t *testing.T) {
 func TestServer_HandleUserList(t *testing.T) {
 	s := NewServer(nil, nil, nil, nil, util.NopLogHandler)
 	validResponse := []*user.User{{Username: "spiderman", Nickname: "spidey", Password: "uncleben123"}}
-	emptyResponse := []*user.User{}
+	emptyResponse := make([]*user.User, 0)
 
 	tests := map[string]struct {
 		request          *http.Request
@@ -149,7 +149,7 @@ func TestServer_HandleUserGet(t *testing.T) {
 
 			var response UserResponse
 			// 404 returns an empty body, should probably do something better somewhere
-			json.NewDecoder(input.recorder.Body).Decode(&response)
+			_ = json.NewDecoder(input.recorder.Body).Decode(&response)
 
 			if response.Nickname != input.expectedResponse.Nickname || response.Username != input.expectedResponse.Username {
 				t.Fatalf("got user %v, expected %v", response, input.expectedResponse)
@@ -204,7 +204,7 @@ func TestServer_HandleUserLogin(t *testing.T) {
 
 			var response UserResponse
 			// 404 returns an empty body, should probably do something better somewhere
-			json.NewDecoder(input.recorder.Body).Decode(&response)
+			_ = json.NewDecoder(input.recorder.Body).Decode(&response)
 
 			if response.Nickname != input.expectedResponse.Nickname || response.Username != input.expectedResponse.Username {
 				t.Fatalf("got user %v, expected %v", response, input.expectedResponse)
