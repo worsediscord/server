@@ -159,7 +159,7 @@ func (s *Server) handleMessageList() http.HandlerFunc {
 			return
 		}
 
-		logger.LogAttrs(r.Context(), slog.LevelInfo, "messages listed", logAttrs...)
+		logger.LogAttrs(r.Context(), slog.LevelDebug, "messages listed", logAttrs...)
 
 		return
 	}
