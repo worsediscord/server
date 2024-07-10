@@ -11,4 +11,6 @@ type GetMessageByIdOpts struct {
 }
 
 type ListMessageOpts struct {
+	UserId string
+	RoomId int64
 }

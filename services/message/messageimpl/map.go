@@ -45,6 +45,23 @@ func (m *Map) GetMessageById(_ context.Context, opts message.GetMessageByIdOpts)
 	return msg, nil
 }
 
-func (m *Map) List(_ context.Context, _ message.ListMessageOpts) ([]*message.Message, error) {
-	return m.data.Values(), nil
+func (m *Map) List(_ context.Context, opts message.ListMessageOpts) ([]*message.Message, error) {
+	messages := make([]*message.Message, 0)
+
+	for _, msg := range m.data.Values() {
+		matchesFilter := true
+
+		if msg.RoomId != opts.RoomId {
+			matchesFilter = false
+		}
+		if len(opts.UserId) > 0 && msg.UserId != opts.UserId {
+			matchesFilter = false
+		}
+
+		if matchesFilter {
+			messages = append(messages, msg)
+		}
+	}
+
+	return messages, nil
 }

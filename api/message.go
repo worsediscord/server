@@ -82,7 +82,7 @@ func (s *Server) handleMessageCreate() http.HandlerFunc {
 
 		opts := message.CreateMessageOpts{
 			UserId:  userId,
-			RoomId:  int64(roomId),
+			RoomId:  roomId,
 			Content: request.Content,
 		}
 
@@ -112,29 +112,45 @@ func (s *Server) handleMessageCreate() http.HandlerFunc {
 //	@Failure	500
 //	@Router		/rooms/{id}/messages [get]
 func (s *Server) handleMessageList() http.HandlerFunc {
+	logger := slog.New(s.logHandler).With(slog.String("handler", "MessageList"))
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		roomId, err := strconv.Atoi(r.PathValue("id"))
+		var logAttrs []slog.Attr
+
+		roomId, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
+		logAttrs = append(logAttrs, slog.Int64("room_id", roomId))
 
-		allMessages, err := s.MessageService.List(r.Context(), message.ListMessageOpts{})
+		// Verify the user exists
+		userId, ok := r.Context().Value("userID").(string)
+		if !ok {
+			logger.LogAttrs(r.Context(), slog.LevelError, "failed to lookup apikey in request context")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if _, err = s.UserService.GetUserById(r.Context(), user.GetUserByIdOpts{Id: userId}); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		logAttrs = append(logAttrs, slog.String("user_id", userId))
+
+		messages, err := s.MessageService.List(r.Context(), message.ListMessageOpts{RoomId: roomId})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		//var response ListMessageResponse
 		response := make([]MessageResponse, 0)
-		for _, msg := range allMessages {
-			if msg.RoomId == int64(roomId) {
-				response = append(response, MessageResponse{
-					UserId:    msg.UserId,
-					Content:   msg.Content,
-					Timestamp: msg.Timestamp,
-				})
-			}
+		for _, msg := range messages {
+			response = append(response, MessageResponse{
+				UserId:    msg.UserId,
+				Content:   msg.Content,
+				Timestamp: msg.Timestamp,
+			})
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -142,6 +158,8 @@ func (s *Server) handleMessageList() http.HandlerFunc {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
+		logger.LogAttrs(r.Context(), slog.LevelInfo, "messages listed", logAttrs...)
 
 		return
 	}
