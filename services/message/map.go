@@ -1,4 +1,4 @@
-package messageimpl
+package message
 
 import (
 	"context"
@@ -7,23 +7,22 @@ import (
 	"time"
 
 	"github.com/eolso/threadsafe"
-	"github.com/worsediscord/server/services/message"
 )
 
 type Map struct {
-	data *threadsafe.Map[string, *message.Message]
+	data *threadsafe.Map[string, *Message]
 }
 
 func NewMap() *Map {
 	return &Map{
-		data: threadsafe.NewMap[string, *message.Message](),
+		data: threadsafe.NewMap[string, *Message](),
 	}
 }
 
-func (m *Map) Create(_ context.Context, opts message.CreateMessageOpts) (*message.Message, error) {
+func (m *Map) Create(_ context.Context, opts CreateMessageOpts) (*Message, error) {
 	id := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%d%d", opts.RoomId, time.Now().UnixMilli())))
 
-	msg := message.Message{
+	msg := Message{
 		Id:        id,
 		UserId:    opts.UserId,
 		RoomId:    opts.RoomId,
@@ -36,17 +35,17 @@ func (m *Map) Create(_ context.Context, opts message.CreateMessageOpts) (*messag
 	return &msg, nil
 }
 
-func (m *Map) GetMessageById(_ context.Context, opts message.GetMessageByIdOpts) (*message.Message, error) {
+func (m *Map) GetMessageById(_ context.Context, opts GetMessageByIdOpts) (*Message, error) {
 	msg, ok := m.data.Get(opts.Id)
 	if !ok {
-		return nil, message.ErrNotFound
+		return nil, ErrNotFound
 	}
 
 	return msg, nil
 }
 
-func (m *Map) List(_ context.Context, opts message.ListMessageOpts) ([]*message.Message, error) {
-	messages := make([]*message.Message, 0)
+func (m *Map) List(_ context.Context, opts ListMessageOpts) ([]*Message, error) {
+	messages := make([]*Message, 0)
 
 	for _, msg := range m.data.Values() {
 		matchesFilter := true

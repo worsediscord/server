@@ -7,9 +7,8 @@ import (
 	"testing"
 
 	"github.com/worsediscord/server/services/auth"
-	"github.com/worsediscord/server/services/auth/authtest"
+	"github.com/worsediscord/server/services/fake"
 	"github.com/worsediscord/server/services/user"
-	"github.com/worsediscord/server/services/user/usertest"
 	"github.com/worsediscord/server/util"
 )
 
@@ -27,19 +26,19 @@ func TestServer_HandleUserCreate(t *testing.T) {
 		"valid": {
 			request:        httptest.NewRequest(http.MethodPost, "/api/users", util.StructToReaderOrDie(validRequest)),
 			recorder:       httptest.NewRecorder(),
-			userService:    &usertest.FakeUserService{ExpectedCreateError: nil, ExpectedGetUserByIdError: user.ErrNotFound},
+			userService:    &fake.UserService{ExpectedCreateError: nil, ExpectedGetUserByIdError: user.ErrNotFound},
 			expectedStatus: http.StatusOK,
 		},
 		"invalid": {
 			request:        httptest.NewRequest(http.MethodPost, "/api/users", util.StructToReaderOrDie(invalidRequest)),
 			recorder:       httptest.NewRecorder(),
-			userService:    &usertest.FakeUserService{},
+			userService:    &fake.UserService{},
 			expectedStatus: http.StatusBadRequest,
 		},
 		"conflict": {
 			request:        httptest.NewRequest(http.MethodPost, "/api/users", util.StructToReaderOrDie(validRequest)),
 			recorder:       httptest.NewRecorder(),
-			userService:    &usertest.FakeUserService{ExpectedGetUserByIdUser: &user.User{Username: "spiderman"}},
+			userService:    &fake.UserService{ExpectedGetUserByIdUser: &user.User{Username: "spiderman"}},
 			expectedStatus: http.StatusConflict,
 		},
 	}
@@ -71,14 +70,14 @@ func TestServer_HandleUserList(t *testing.T) {
 		"valid": {
 			request:          httptest.NewRequest(http.MethodGet, "/api/users", nil),
 			recorder:         httptest.NewRecorder(),
-			userService:      &usertest.FakeUserService{ExpectedListUsers: validResponse},
+			userService:      &fake.UserService{ExpectedListUsers: validResponse},
 			expectedStatus:   http.StatusOK,
 			expectedResponse: []UserResponse{{Username: "spiderman", Nickname: "spidey"}},
 		},
 		"empty": {
 			request:          httptest.NewRequest(http.MethodGet, "/api/users", nil),
 			recorder:         httptest.NewRecorder(),
-			userService:      &usertest.FakeUserService{ExpectedListUsers: emptyResponse},
+			userService:      &fake.UserService{ExpectedListUsers: emptyResponse},
 			expectedStatus:   http.StatusOK,
 			expectedResponse: []UserResponse{},
 		},
@@ -125,14 +124,14 @@ func TestServer_HandleUserGet(t *testing.T) {
 		"valid": {
 			request:          httptest.NewRequest(http.MethodGet, "/api/users/spiderman", nil),
 			recorder:         httptest.NewRecorder(),
-			userService:      &usertest.FakeUserService{ExpectedGetUserByIdUser: validResponse},
+			userService:      &fake.UserService{ExpectedGetUserByIdUser: validResponse},
 			expectedStatus:   http.StatusOK,
 			expectedResponse: UserResponse{Username: "spiderman", Nickname: "spidey"},
 		},
 		"empty": {
 			request:          httptest.NewRequest(http.MethodGet, "/api/users/batman", nil),
 			recorder:         httptest.NewRecorder(),
-			userService:      &usertest.FakeUserService{ExpectedGetUserByIdUser: emptyResponse, ExpectedGetUserByIdError: user.ErrNotFound},
+			userService:      &fake.UserService{ExpectedGetUserByIdUser: emptyResponse, ExpectedGetUserByIdError: user.ErrNotFound},
 			expectedStatus:   http.StatusNotFound,
 			expectedResponse: UserResponse{},
 		},
@@ -179,16 +178,16 @@ func TestServer_HandleUserLogin(t *testing.T) {
 		"valid": {
 			request:          httptest.NewRequest(http.MethodGet, "/api/users/login", nil),
 			recorder:         httptest.NewRecorder(),
-			userService:      &usertest.FakeUserService{ExpectedGetUserByIdUser: validResponse},
-			authService:      &authtest.FakeAuthService{},
+			userService:      &fake.UserService{ExpectedGetUserByIdUser: validResponse},
+			authService:      &fake.AuthService{},
 			expectedStatus:   http.StatusOK,
 			expectedResponse: UserResponse{Username: "spiderman", Nickname: "spidey"},
 		},
 		"empty": {
 			request:        httptest.NewRequest(http.MethodGet, "/api/users/login", nil),
 			recorder:       httptest.NewRecorder(),
-			userService:    &usertest.FakeUserService{ExpectedGetUserByIdUser: &user.User{}, ExpectedGetUserByIdError: user.ErrNotFound},
-			authService:    &authtest.FakeAuthService{},
+			userService:    &fake.UserService{ExpectedGetUserByIdUser: &user.User{}, ExpectedGetUserByIdError: user.ErrNotFound},
+			authService:    &fake.AuthService{},
 			expectedStatus: http.StatusNotFound,
 		},
 	}

@@ -3,9 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/worsediscord/server/cmd"
 	"os"
 	"path/filepath"
+
+	"github.com/worsediscord/server/cmd"
 )
 
 type RootCmd struct {

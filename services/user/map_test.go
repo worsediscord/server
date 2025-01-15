@@ -1,11 +1,9 @@
-package userimpl
+package user
 
 import (
 	"errors"
 	"reflect"
 	"testing"
-
-	"github.com/worsediscord/server/services/user"
 )
 
 func TestNewMap(t *testing.T) {
@@ -18,24 +16,24 @@ func TestMap_Create(t *testing.T) {
 	m := NewMap()
 
 	tests := map[string]struct {
-		opts        user.CreateUserOpts
+		opts        CreateUserOpts
 		expectedErr error
 	}{
 		"initial valid": {
-			opts:        user.CreateUserOpts{Username: "spiderman", Password: "uncleben123"},
+			opts:        CreateUserOpts{Username: "spiderman", Password: "uncleben123"},
 			expectedErr: nil,
 		},
 		"duplicate user": {
-			opts:        user.CreateUserOpts{Username: "spiderman", Password: "uncleben123"},
-			expectedErr: user.ErrConflict,
+			opts:        CreateUserOpts{Username: "spiderman", Password: "uncleben123"},
+			expectedErr: ErrConflict,
 		},
 		"invalid user": {
-			opts:        user.CreateUserOpts{Username: "", Password: "uncleben123"},
-			expectedErr: user.ErrInvalidUsername,
+			opts:        CreateUserOpts{Username: "", Password: "uncleben123"},
+			expectedErr: ErrInvalidUsername,
 		},
 		"invalid password": {
-			opts:        user.CreateUserOpts{Username: "spiderman2", Password: "ben"},
-			expectedErr: user.ErrInvalidPassword,
+			opts:        CreateUserOpts{Username: "spiderman2", Password: "ben"},
+			expectedErr: ErrInvalidPassword,
 		},
 	}
 
@@ -51,24 +49,24 @@ func TestMap_Create(t *testing.T) {
 func TestMap_GetUserById(t *testing.T) {
 	m := NewMap()
 
-	if err := m.Create(nil, user.CreateUserOpts{Username: "spiderman", Password: "uncleben123"}); err != nil {
+	if err := m.Create(nil, CreateUserOpts{Username: "spiderman", Password: "uncleben123"}); err != nil {
 		t.Fatalf("failed to prepopulate map: %v", err)
 	}
 
 	tests := map[string]struct {
-		opts         user.GetUserByIdOpts
-		expectedUser *user.User
+		opts         GetUserByIdOpts
+		expectedUser *User
 		expectedErr  error
 	}{
 		"valid": {
-			opts:         user.GetUserByIdOpts{Id: "spiderman"},
-			expectedUser: &user.User{Username: "spiderman", Nickname: "spiderman", Password: "uncleben123"},
+			opts:         GetUserByIdOpts{Id: "spiderman"},
+			expectedUser: &User{Username: "spiderman", Nickname: "spiderman", Password: "uncleben123"},
 			expectedErr:  nil,
 		},
 		"invalid": {
-			opts:         user.GetUserByIdOpts{Id: "antman"},
+			opts:         GetUserByIdOpts{Id: "antman"},
 			expectedUser: nil,
-			expectedErr:  user.ErrNotFound,
+			expectedErr:  ErrNotFound,
 		},
 	}
 
@@ -91,23 +89,23 @@ func TestMap_List(t *testing.T) {
 	nonEmptyMap := NewMap()
 	emptyMap := NewMap()
 
-	if err := nonEmptyMap.Create(nil, user.CreateUserOpts{Username: "spiderman", Password: "uncleben123"}); err != nil {
+	if err := nonEmptyMap.Create(nil, CreateUserOpts{Username: "spiderman", Password: "uncleben123"}); err != nil {
 		t.Fatalf("failed to prepopulate map: %v", err)
 	}
 
 	tests := map[string]struct {
 		m             *Map
-		expectedUsers []*user.User
+		expectedUsers []*User
 		expectedErr   error
 	}{
 		"non-empty": {
 			m:             nonEmptyMap,
-			expectedUsers: []*user.User{{Username: "spiderman", Nickname: "spiderman", Password: "uncleben123"}},
+			expectedUsers: []*User{{Username: "spiderman", Nickname: "spiderman", Password: "uncleben123"}},
 			expectedErr:   nil,
 		},
 		"empty": {
 			m:             emptyMap,
-			expectedUsers: []*user.User{},
+			expectedUsers: []*User{},
 			expectedErr:   nil,
 		},
 	}
@@ -131,7 +129,7 @@ func TestMap_List(t *testing.T) {
 func TestMap_Delete(t *testing.T) {
 	m := NewMap()
 
-	if err := m.Delete(nil, user.DeleteUserOpts{}); err != nil {
+	if err := m.Delete(nil, DeleteUserOpts{}); err != nil {
 		t.Fatalf("got error %q, expected nil", err)
 	}
 }

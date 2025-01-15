@@ -1,11 +1,9 @@
-package messageimpl
+package message
 
 import (
 	"errors"
 	"reflect"
 	"testing"
-
-	"github.com/worsediscord/server/services/message"
 )
 
 func TestNewMap(t *testing.T) {
@@ -18,11 +16,11 @@ func TestMap_Create(t *testing.T) {
 	m := NewMap()
 
 	tests := map[string]struct {
-		opts        message.CreateMessageOpts
+		opts        CreateMessageOpts
 		expectedErr error
 	}{
 		"valid": {
-			opts: message.CreateMessageOpts{
+			opts: CreateMessageOpts{
 				UserId:  "spiderman",
 				RoomId:  100000000000,
 				Content: "pizza time",
@@ -44,25 +42,25 @@ func TestMap_Create(t *testing.T) {
 func TestMap_GetMessageById(t *testing.T) {
 	m := NewMap()
 
-	msg, err := m.Create(nil, message.CreateMessageOpts{UserId: "spiderman", RoomId: 100000000000, Content: "pizza time"})
+	msg, err := m.Create(nil, CreateMessageOpts{UserId: "spiderman", RoomId: 100000000000, Content: "pizza time"})
 	if err != nil {
 		t.Fatalf("failed to prepopulate map: %v", err)
 	}
 
 	tests := map[string]struct {
-		opts            message.GetMessageByIdOpts
-		expectedMessage *message.Message
+		opts            GetMessageByIdOpts
+		expectedMessage *Message
 		expectedErr     error
 	}{
 		"valid": {
-			opts:            message.GetMessageByIdOpts{Id: msg.Id},
+			opts:            GetMessageByIdOpts{Id: msg.Id},
 			expectedMessage: msg,
 			expectedErr:     nil,
 		},
 		"not found": {
-			opts:            message.GetMessageByIdOpts{Id: ""},
+			opts:            GetMessageByIdOpts{Id: ""},
 			expectedMessage: nil,
-			expectedErr:     message.ErrNotFound,
+			expectedErr:     ErrNotFound,
 		},
 	}
 
@@ -85,31 +83,31 @@ func TestMap_List(t *testing.T) {
 	nonEmptyMap := NewMap()
 	emptyMap := NewMap()
 
-	msg, err := nonEmptyMap.Create(nil, message.CreateMessageOpts{UserId: "spiderman", RoomId: 100000000000, Content: "pizza time"})
+	msg, err := nonEmptyMap.Create(nil, CreateMessageOpts{UserId: "spiderman", RoomId: 100000000000, Content: "pizza time"})
 	if err != nil {
 		t.Fatalf("failed to prepopulate map: %v", err)
 	}
 
 	tests := map[string]struct {
 		m                *Map
-		expectedMessages []*message.Message
+		expectedMessages []*Message
 		expectedErr      error
 	}{
 		"non-empty": {
 			m:                nonEmptyMap,
-			expectedMessages: []*message.Message{msg},
+			expectedMessages: []*Message{msg},
 			expectedErr:      nil,
 		},
 		"empty": {
 			m:                emptyMap,
-			expectedMessages: []*message.Message{},
+			expectedMessages: []*Message{},
 			expectedErr:      nil,
 		},
 	}
 
 	for name, input := range tests {
 		t.Run(name, func(t *testing.T) {
-			messages, err := input.m.List(nil, message.ListMessageOpts{})
+			messages, err := input.m.List(nil, ListMessageOpts{})
 
 			if !errors.Is(err, input.expectedErr) {
 				t.Fatalf("got error %q, expected %q", err, input.expectedErr)

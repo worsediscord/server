@@ -1,5 +1,5 @@
 all:
-	go build -C ./cmd/ -o ../bin/wdscmd
+	go build -C ./cmd/wdscmd -o ../../bin/wdscmd
 
 swag:
 	swag fmt && swag init -d api/ -g server.go -ot json -o ./api/docs

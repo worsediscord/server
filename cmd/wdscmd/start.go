@@ -3,19 +3,19 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/go-chi/cors"
-	"github.com/worsediscord/server/cmd"
-	"github.com/worsediscord/server/services/auth/authimpl"
-	"github.com/worsediscord/server/services/message/messageimpl"
-	"github.com/worsediscord/server/services/room/roomimpl"
-	"github.com/worsediscord/server/services/user/userimpl"
-	"github.com/worsediscord/server/util"
 	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 
+	"github.com/go-chi/cors"
 	"github.com/worsediscord/server/api"
+	"github.com/worsediscord/server/cmd"
+	"github.com/worsediscord/server/services/auth"
+	"github.com/worsediscord/server/services/message"
+	"github.com/worsediscord/server/services/room"
+	"github.com/worsediscord/server/services/user"
+	"github.com/worsediscord/server/util"
 )
 
 type StartCmd struct {
@@ -73,10 +73,10 @@ func (s *StartCmd) Run() error {
 	var logHandler slog.Handler
 	var middleware []api.Middleware
 
-	userService := userimpl.NewMap()
-	roomService := roomimpl.NewMap()
-	messageService := messageimpl.NewMap()
-	authService := authimpl.NewMap()
+	userService := user.NewMap()
+	roomService := room.NewMap()
+	messageService := message.NewMap()
+	authService := auth.NewMap()
 
 	corsHandler := cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"https://*", "http://*"},

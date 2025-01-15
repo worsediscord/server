@@ -1,23 +1,22 @@
-package authimpl
+package auth
 
 import (
 	"time"
 
 	"github.com/eolso/threadsafe"
-	"github.com/worsediscord/server/services/auth"
 )
 
 type Map struct {
-	data *threadsafe.Map[string, auth.ApiKey]
+	data *threadsafe.Map[string, ApiKey]
 }
 
 func NewMap() *Map {
 	return &Map{
-		data: threadsafe.NewMap[string, auth.ApiKey](),
+		data: threadsafe.NewMap[string, ApiKey](),
 	}
 }
 
-func (m *Map) RegisterKey(s string, key auth.ApiKey) error {
+func (m *Map) RegisterKey(s string, key ApiKey) error {
 	m.data.Set(s, key)
 
 	go func() {
@@ -28,10 +27,10 @@ func (m *Map) RegisterKey(s string, key auth.ApiKey) error {
 	return nil
 }
 
-func (m *Map) RetrieveKey(s string) (auth.ApiKey, error) {
+func (m *Map) RetrieveKey(s string) (ApiKey, error) {
 	key, ok := m.data.Get(s)
 	if !ok {
-		return auth.ApiKey{}, auth.ErrNotFound
+		return ApiKey{}, ErrNotFound
 	}
 
 	return key, nil

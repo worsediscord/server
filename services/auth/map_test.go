@@ -1,7 +1,6 @@
-package authimpl
+package auth
 
 import (
-	"github.com/worsediscord/server/services/auth"
 	"reflect"
 	"testing"
 	"time"
@@ -10,7 +9,7 @@ import (
 func TestMap_RegisterKey(t *testing.T) {
 	m := NewMap()
 
-	if err := m.RegisterKey("key", auth.NewApiKey(1, time.Second, nil)); err != nil {
+	if err := m.RegisterKey("key", NewApiKey(1, time.Second, nil)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -34,7 +33,7 @@ func TestMap_RetrieveKey(t *testing.T) {
 
 	for name, input := range tests {
 		t.Run(name, func(t *testing.T) {
-			if err := m.RegisterKey(input.key, auth.NewApiKey(input.length, input.duration, input.payload)); err != nil {
+			if err := m.RegisterKey(input.key, NewApiKey(input.length, input.duration, input.payload)); err != nil {
 				t.Fatal(err)
 			}
 

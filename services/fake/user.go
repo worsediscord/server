@@ -1,4 +1,4 @@
-package usertest
+package fake
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"github.com/worsediscord/server/services/user"
 )
 
-type FakeUserService struct {
+type UserService struct {
 	ExpectedCreateError error
 
 	ExpectedGetUserByIdUser  *user.User
@@ -18,18 +18,18 @@ type FakeUserService struct {
 	ExpectedDeleteError error
 }
 
-func (f *FakeUserService) Create(_ context.Context, _ user.CreateUserOpts) error {
+func (f *UserService) Create(_ context.Context, _ user.CreateUserOpts) error {
 	return f.ExpectedCreateError
 }
 
-func (f *FakeUserService) GetUserById(_ context.Context, _ user.GetUserByIdOpts) (*user.User, error) {
+func (f *UserService) GetUserById(_ context.Context, _ user.GetUserByIdOpts) (*user.User, error) {
 	return f.ExpectedGetUserByIdUser, f.ExpectedGetUserByIdError
 }
 
-func (f *FakeUserService) List(_ context.Context) ([]*user.User, error) {
+func (f *UserService) List(_ context.Context) ([]*user.User, error) {
 	return f.ExpectedListUsers, f.ExpectedListError
 }
 
-func (f *FakeUserService) Delete(_ context.Context, _ user.DeleteUserOpts) error {
+func (f *UserService) Delete(_ context.Context, _ user.DeleteUserOpts) error {
 	return f.ExpectedDeleteError
 }
